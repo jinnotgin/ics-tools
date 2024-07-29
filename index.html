@@ -24,23 +24,22 @@
         let originalFileName = '';
 
         // Main processing function
-        async function processICSFile(file) {
-            try {
-                const content = await readFile(file);
-                if (!isValidICSFile(content)) {
-                    throw new Error('Invalid ICS file');
-                }
-
-                const { globalInfo, events } = parseICSFile(content);
-                const chunks = chunkEvents(events, CHUNK_SIZE);
-                const icsFiles = generateICSFiles(globalInfo, chunks);
-
-                displayResults(icsFiles);
-                //createCombinedFile(globalInfo, events);
-            } catch (error) {
-                alert(`Error: ${error.message}`);
-            }
+async function processICSFile(file) {
+    try {
+        const content = await readFile(file);
+        if (!isValidICSFile(content)) {
+            throw new Error('Invalid ICS file');
         }
+
+        const { globalInfo, components } = parseICSFile(content);
+        const chunkedComponents = chunkComponents(components, CHUNK_SIZE);
+        const icsFiles = generateICSFiles(globalInfo, chunkedComponents);
+
+        displayResults(icsFiles);
+    } catch (error) {
+        alert(`Error: ${error.message}`);
+    }
+}
 
         // File reading function
         function readFile(file) {
@@ -91,27 +90,31 @@ function parseICSFile(content) {
     return { globalInfo: globalInfo.join('\r\n'), components };
 }
 
-        // Event chunking function
-        function chunkEvents(events, chunkSize) {
-            const chunks = [];
-            for (let i = 0; i < events.length; i += chunkSize) {
-                chunks.push(events.slice(i, i + chunkSize));
-            }
-            return chunks;
+        // Component chunking function
+function chunkComponents(components, chunkSize) {
+    const chunkedComponents = {};
+    for (const [type, items] of Object.entries(components)) {
+        chunkedComponents[type] = [];
+        for (let i = 0; i < items.length; i += chunkSize) {
+            chunkedComponents[type].push(items.slice(i, i + chunkSize));
         }
+    }
+    return chunkedComponents;
+}
 
         // Generate ICS files function
-        function generateICSFiles(globalInfo, chunks) {
-            return chunks.map((chunk, index) => {
-                const content = [
-                    'BEGIN:VCALENDAR',
-                    ...globalInfo.split(/\r\n|\n|\r/).filter(line => !line.startsWith('BEGIN:VCALENDAR') && !line.startsWith('END:VCALENDAR')),
-                    ...chunk,
-                    'END:VCALENDAR'
-                ].join('\r\n');
-                return { name: `chunk_${index + 1}.ics`, content };
-            });
-        }
+function generateICSFiles(globalInfo, chunkedComponents) {
+    const allChunks = Object.values(chunkedComponents).flat();
+    return allChunks.map((chunk, index) => {
+        const content = [
+            'BEGIN:VCALENDAR',
+            ...globalInfo.split(/\r\n|\n|\r/).filter(line => !line.startsWith('BEGIN:VCALENDAR') && !line.startsWith('END:VCALENDAR')),
+            ...chunk.flat(),
+            'END:VCALENDAR'
+        ].join('\r\n');
+        return { name: `chunk_${index + 1}.ics`, content };
+    });
+}
 
         // Display results function
         function displayResults(icsFiles) {
