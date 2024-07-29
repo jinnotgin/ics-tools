@@ -1,185 +1,249 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
+  <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Calendar ICS File Chunker</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.7.1/jszip.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;700&amp;display=swap" rel="stylesheet">
     <style>
-        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
-        button { margin: 10px 0; }
-        #results { margin-top: 20px; }
+      body {
+        font-family: 'Roboto', Arial, sans-serif;
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 20px;
+        background-color: #f5f5f5;
+        color: #333;
+      }
+
+      .container {
+        background-color: white;
+        padding: 30px;
+        border-radius: 8px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      }
+
+      h1 {
+        color: #2c3e50;
+        margin-bottom: 20px;
+      }
+
+      p {
+        line-height: 1.6;
+        color: #555;
+      }
+
+      .file-input-wrapper {
+        display: flex;
+        align-items: center;
+        margin-bottom: 20px;
+        gap: 0.5rem;
+      }
+
+      #icsFileInput {
+        flex-grow: 1;
+        padding: 10px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+      }
+
+      button {
+        background-color: #3498db;
+        color: white;
+        border: none;
+        padding: 10px 20px;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: background-color 0.3s;
+      }
+
+      button:hover {
+        background-color: #2980b9;
+      }
+
+      #results {
+        margin-top: 30px;
+      }
+
+      ul {
+        list-style-type: none;
+        padding: 0;
+      }
+
+      li {
+        margin-bottom: 10px;
+      }
+
+      a {
+        color: #3498db;
+        text-decoration: none;
+      }
+
+      a:hover {
+        text-decoration: underline;
+      }
     </style>
-</head>
-<body>
-    <h1>Calendar ICS File Chunker</h1>
-    <input type="file" id="icsFileInput" accept=".ics">
-    <button id="processButton">Process File</button>
-    <div id="results"></div>
-
+  </head>
+  <body>
+    <div class="container">
+      <h1>Calendar ICS File Chunker</h1>
+      <p> This tool is designed to assist with calendar migration efforts by breaking up large ICS files into smaller, more manageable chunks. It's particularly useful when dealing with calendars that have a high number of events and need to be split for easier processing or import into other systems. </p>
+      <div class="file-input-wrapper">
+        <input type="file" id="icsFileInput" accept=".ics">
+        <button id="processButton" style="
+    /* margin-left: 1em; */
+">Process File</button>
+      </div>
+      <div id="results"></div>
+    </div>
     <script>
-        // Configuration
-        const CHUNK_SIZE = 1000; // Number of events per chunk
-        let originalFileName = '';
-
-        // Main processing function
-async function processICSFile(file) {
-    try {
-        const content = await readFile(file);
-        if (!isValidICSFile(content)) {
+      // Configuration
+      const CHUNK_SIZE = 1000; // Number of events per chunk
+      let originalFileName = '';
+      // Main processing function
+      async function processICSFile(file) {
+        try {
+          const content = await readFile(file);
+          if (!isValidICSFile(content)) {
             throw new Error('Invalid ICS file');
+          }
+          const {
+            globalInfo,
+            components
+          } = parseICSFile(content);
+          const chunkedComponents = chunkComponents(components, CHUNK_SIZE);
+          const icsFiles = generateICSFiles(globalInfo, chunkedComponents);
+          displayResults(icsFiles);
+        } catch (error) {
+          alert(`Error: ${error.message}`);
         }
-
-        const { globalInfo, components } = parseICSFile(content);
-        const chunkedComponents = chunkComponents(components, CHUNK_SIZE);
-        const icsFiles = generateICSFiles(globalInfo, chunkedComponents);
-
-        displayResults(icsFiles);
-    } catch (error) {
-        alert(`Error: ${error.message}`);
-    }
-}
-
-        // File reading function
-        function readFile(file) {
-            return new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = (e) => resolve(e.target.result);
-                reader.onerror = (e) => reject(new Error('Error reading file'));
-                reader.readAsText(file);
-            });
-        }
-
-        // ICS file validation function
-        function isValidICSFile(content) {
-            return content.trim().startsWith('BEGIN:VCALENDAR') && content.trim().endsWith('END:VCALENDAR');
-        }
-
-        // ICS file parsing function
-function parseICSFile(content) {
-    const lines = content.split(/\r\n|\n|\r/);
-    let globalInfo = [];
-    let components = {
-        VEVENT: [],
-        VTODO: [],
-        VJOURNAL: [],
-        VFREEBUSY: []
-    };
-    let currentComponent = null;
-    let inComponent = false;
-    let currentType = null;
-
-    for (const line of lines) {
-        if (line.startsWith('BEGIN:') && components.hasOwnProperty(line.split(':')[1])) {
+      }
+      // File reading function
+      function readFile(file) {
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = (e) => resolve(e.target.result);
+          reader.onerror = (e) => reject(new Error('Error reading file'));
+          reader.readAsText(file);
+        });
+      }
+      // ICS file validation function
+      function isValidICSFile(content) {
+        return content.trim().startsWith('BEGIN:VCALENDAR') && content.trim().endsWith('END:VCALENDAR');
+      }
+      // ICS file parsing function
+      function parseICSFile(content) {
+        const lines = content.split(/\r\n|\n|\r/);
+        let globalInfo = [];
+        let components = {
+          VEVENT: [],
+          VTODO: [],
+          VJOURNAL: [],
+          VFREEBUSY: []
+        };
+        let currentComponent = null;
+        let inComponent = false;
+        let currentType = null;
+        for (const line of lines) {
+          if (line.startsWith('BEGIN:') && components.hasOwnProperty(line.split(':')[1])) {
             inComponent = true;
             currentType = line.split(':')[1];
             currentComponent = [line];
-        } else if (line.startsWith(`END:${currentType}`)) {
+          } else if (line.startsWith(`END:${currentType}`)) {
             currentComponent.push(line);
             components[currentType].push(currentComponent.join('\r\n'));
             inComponent = false;
             currentType = null;
-        } else if (inComponent) {
+          } else if (inComponent) {
             currentComponent.push(line);
-        } else {
+          } else {
             globalInfo.push(line);
+          }
         }
-    }
-
-    return { globalInfo: globalInfo.join('\r\n'), components };
-}
-
-        // Component chunking function
-function chunkComponents(components, chunkSize) {
-    const chunkedComponents = {};
-    for (const [type, items] of Object.entries(components)) {
-        chunkedComponents[type] = [];
-        for (let i = 0; i < items.length; i += chunkSize) {
+        return {
+          globalInfo: globalInfo.join('\r\n'),
+          components
+        };
+      }
+      // Component chunking function
+      function chunkComponents(components, chunkSize) {
+        const chunkedComponents = {};
+        for (const [type, items] of Object.entries(components)) {
+          chunkedComponents[type] = [];
+          for (let i = 0; i < items.length; i += chunkSize) {
             chunkedComponents[type].push(items.slice(i, i + chunkSize));
+          }
         }
-    }
-    return chunkedComponents;
-}
-
-        // Generate ICS files function
-function generateICSFiles(globalInfo, chunkedComponents) {
-    const allChunks = Object.values(chunkedComponents).flat();
-    return allChunks.map((chunk, index) => {
-        const content = [
-            'BEGIN:VCALENDAR',
-            ...globalInfo.split(/\r\n|\n|\r/).filter(line => !line.startsWith('BEGIN:VCALENDAR') && !line.startsWith('END:VCALENDAR')),
-            ...chunk.flat(),
-            'END:VCALENDAR'
-        ].join('\r\n');
-        return { name: `chunk_${index + 1}.ics`, content };
-    });
-}
-
-        // Display results function
-        function displayResults(icsFiles) {
-            const resultsDiv = document.getElementById('results');
-            resultsDiv.innerHTML = '<h2>Chunked Files:</h2>';
-            const ul = document.createElement('ul');
-
-            icsFiles.forEach((file, index) => {
-                const li = document.createElement('li');
-                const downloadLink = document.createElement('a');
-                downloadLink.href = URL.createObjectURL(new Blob([file.content], { type: 'text/calendar' }));
-                downloadLink.download = file.name;
-                downloadLink.textContent = `Download ${file.name}`;
-                li.appendChild(downloadLink);
-                ul.appendChild(li);
-            });
-
-            resultsDiv.appendChild(ul);
-
-            const downloadAllButton = document.createElement('button');
-            downloadAllButton.textContent = 'Download All (Zip)';
-            downloadAllButton.addEventListener('click', () => downloadZip(icsFiles));
-            resultsDiv.appendChild(downloadAllButton);
-        }
-
-        // Create combined file function
-        function createCombinedFile(globalInfo, events) {
-            const content = [
-                'BEGIN:VCALENDAR',
-                ...globalInfo.split(/\r\n|\n|\r/).filter(line => !line.startsWith('BEGIN:VCALENDAR') && !line.startsWith('END:VCALENDAR')),
-                ...events,
-                'END:VCALENDAR'
-            ].join('\r\n');
-
-            const downloadLink = document.createElement('a');
-            downloadLink.href = URL.createObjectURL(new Blob([content], { type: 'text/calendar' }));
-            downloadLink.download = 'combined.ics';
-            downloadLink.textContent = 'Download Combined File';
-            document.getElementById('results').appendChild(downloadLink);
-        }
-
-        // Download zip function
-        async function downloadZip(icsFiles) {
-            const zip = new JSZip();
-            icsFiles.forEach(file => zip.file(file.name, file.content));
-            const content = await zip.generateAsync({ type: 'blob' });
-            
-            // Generate the new zip file name
-            const baseName = originalFileName.replace(/\.ics$/i, '');
-            const zipFileName = `${baseName}_chunked.zip`;
-            
-            saveAs(content, zipFileName);
-        }
-
-        // Event listeners
-        document.getElementById('processButton').addEventListener('click', () => {
-            const fileInput = document.getElementById('icsFileInput');
-            const file = fileInput.files[0];
-            if (file) {
-                originalFileName = file.name;
-                processICSFile(file);
-            } else {
-                alert('Please select an ICS file');
-            }
+        return chunkedComponents;
+      }
+      // Generate ICS files function
+      function generateICSFiles(globalInfo, chunkedComponents) {
+        const allChunks = Object.values(chunkedComponents).flat();
+        return allChunks.map((chunk, index) => {
+          const content = ['BEGIN:VCALENDAR', ...globalInfo.split(/\r\n|\n|\r/).filter(line => !line.startsWith('BEGIN:VCALENDAR') && !line.startsWith('END:VCALENDAR')), ...chunk.flat(), 'END:VCALENDAR'].join('\r\n');
+          return {
+            name: `chunk_${index + 1}.ics`,
+            content
+          };
         });
+      }
+      // Display results function
+      function displayResults(icsFiles) {
+        const resultsDiv = document.getElementById('results');
+        resultsDiv.innerHTML = ' < h2 > Chunked Files: < /h2>';
+        const ul = document.createElement('ul');
+        icsFiles.forEach((file, index) => {
+          const li = document.createElement('li');
+          const downloadLink = document.createElement('a');
+          downloadLink.href = URL.createObjectURL(new Blob([file.content], {
+            type: 'text/calendar'
+          }));
+          downloadLink.download = file.name;
+          downloadLink.textContent = `Download ${file.name}`;
+          li.appendChild(downloadLink);
+          ul.appendChild(li);
+        });
+        resultsDiv.appendChild(ul);
+        const downloadAllButton = document.createElement('button');
+        downloadAllButton.textContent = 'Download All (Zip)';
+        downloadAllButton.addEventListener('click', () => downloadZip(icsFiles));
+        resultsDiv.appendChild(downloadAllButton);
+      }
+      // Create combined file function
+      function createCombinedFile(globalInfo, events) {
+        const content = ['BEGIN:VCALENDAR', ...globalInfo.split(/\r\n|\n|\r/).filter(line => !line.startsWith('BEGIN:VCALENDAR') && !line.startsWith('END:VCALENDAR')), ...events, 'END:VCALENDAR'].join('\r\n');
+        const downloadLink = document.createElement('a');
+        downloadLink.href = URL.createObjectURL(new Blob([content], {
+          type: 'text/calendar'
+        }));
+        downloadLink.download = 'combined.ics';
+        downloadLink.textContent = 'Download Combined File';
+        document.getElementById('results').appendChild(downloadLink);
+      }
+      // Download zip function
+      async function downloadZip(icsFiles) {
+        const zip = new JSZip();
+        icsFiles.forEach(file => zip.file(file.name, file.content));
+        const content = await zip.generateAsync({
+          type: 'blob'
+        });
+        // Generate the new zip file name
+        const baseName = originalFileName.replace(/\.ics$/i, '');
+        const zipFileName = `${baseName}_chunked.zip`;
+        saveAs(content, zipFileName);
+      }
+      // Event listeners
+      document.getElementById('processButton').addEventListener('click', () => {
+        const fileInput = document.getElementById('icsFileInput');
+        const file = fileInput.files[0];
+        if (file) {
+          originalFileName = file.name;
+          processICSFile(file);
+        } else {
+          alert('Please select an ICS file');
+        }
+      });
     </script>
-</body>
+  </body>
 </html>
