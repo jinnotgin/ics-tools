@@ -58,30 +58,38 @@
         }
 
         // ICS file parsing function
-        function parseICSFile(content) {
-            const lines = content.split(/\r\n|\n|\r/);
-            let globalInfo = [];
-            let events = [];
-            let currentEvent = null;
-            let inEvent = false;
+function parseICSFile(content) {
+    const lines = content.split(/\r\n|\n|\r/);
+    let globalInfo = [];
+    let components = {
+        VEVENT: [],
+        VTODO: [],
+        VJOURNAL: [],
+        VFREEBUSY: []
+    };
+    let currentComponent = null;
+    let inComponent = false;
+    let currentType = null;
 
-            for (const line of lines) {
-                if (line.startsWith('BEGIN:VEVENT')) {
-                    inEvent = true;
-                    currentEvent = [line];
-                } else if (line.startsWith('END:VEVENT')) {
-                    currentEvent.push(line);
-                    events.push(currentEvent.join('\r\n'));
-                    inEvent = false;
-                } else if (inEvent) {
-                    currentEvent.push(line);
-                } else {
-                    globalInfo.push(line);
-                }
-            }
-
-            return { globalInfo: globalInfo.join('\r\n'), events };
+    for (const line of lines) {
+        if (line.startsWith('BEGIN:') && components.hasOwnProperty(line.split(':')[1])) {
+            inComponent = true;
+            currentType = line.split(':')[1];
+            currentComponent = [line];
+        } else if (line.startsWith(`END:${currentType}`)) {
+            currentComponent.push(line);
+            components[currentType].push(currentComponent.join('\r\n'));
+            inComponent = false;
+            currentType = null;
+        } else if (inComponent) {
+            currentComponent.push(line);
+        } else {
+            globalInfo.push(line);
         }
+    }
+
+    return { globalInfo: globalInfo.join('\r\n'), components };
+}
 
         // Event chunking function
         function chunkEvents(events, chunkSize) {
