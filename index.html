@@ -132,7 +132,7 @@
 				color: #7f8c8d;
 				font-size: 0.9em;
 			}
-			
+
 			footer a {
 				color: #3498db; /* Set your desired color here */
 				text-decoration: none;
@@ -276,6 +276,15 @@
 			function displayResults(icsFiles) {
 				const resultsDiv = document.getElementById("results");
 				resultsDiv.innerHTML = "<h2>Chunked Files:</h2>";
+
+				// Add descriptor about chunked files
+				const descriptor = document.createElement("p");
+				descriptor.innerHTML = `
+        The original ICS file has been split into ${icsFiles.length} chunks, 
+        each containing up to ${CHUNK_SIZE} events. You can download individual chunks or all chunks 
+        as a zip file.
+    `;
+				resultsDiv.appendChild(descriptor);
 
 				const chunkList = document.createElement("div");
 				chunkList.className = "chunk-list";
