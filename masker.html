@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ICS Email Masker</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        input,
+        button {
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>ICS Email Masker</h1>
+    <input type="file" id="fileInput" accept=".ics" />
+    <button onclick="processFile()">Process and Download</button>
+
+    <script>
+        function processFile() {
+            const fileInput = document.getElementById("fileInput");
+            const file = fileInput.files[0];
+            if (!file) {
+                alert("Please select a file");
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function (e) {
+                const content = e.target.result;
+                const maskedContent = maskEmails(content);
+                downloadFile(maskedContent, "masked_" + file.name);
+            };
+            reader.readAsText(file);
+        }
+
+        function maskEmails(content) {
+            const emailMap = new Map();
+						emailMap.set("jin@ufinity.com", "jcal@ufinity.com")
+            let counter = 1;
+
+            // Function to replace email with a dummy
+            function replaceEmail(match) {
+                if (!emailMap.has(match)) {
+                    emailMap.set(match, `dummy${counter}@example.com`);
+                    counter++;
+                }
+                return emailMap.get(match);
+            }
+
+            // First, join any split lines for mailto: addresses, including when "mailto:" is split
+            content = content.replace(
+                /(?:^|\n)([^:\r\n]+:)+[^\r\n]*(?:\r?\n [^\r\n]+)+/gm,
+                function (match) {
+                    return match.replace(/\r?\n /g, "");
+                }
+            );
+
+            // Now replace the emails
+            const emailRegex =
+                /mailto:([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/g;
+            content = content.replace(
+                emailRegex,
+                (match, email) => "mailto:" + replaceEmail(email)
+            );
+
+            // Refold lines to ensure ICS compliance
+            return refoldLines(content);
+        }
+
+        function refoldLines(content) {
+            const maxLineLength = 75; // ICS standard maximum line length
+            return content.split(/\r?\n/).map(line => {
+                if (line.length <= maxLineLength) {
+                    return line;
+                }
+                let foldedLine = '';
+                while (line.length > maxLineLength) {
+                    foldedLine += line.slice(0, maxLineLength) + '\r\n ';
+                    line = line.slice(maxLineLength);
+                }
+                foldedLine += line;
+                return foldedLine;
+            }).join('\r\n');
+        }
+
+        function downloadFile(content, filename) {
+            const blob = new Blob([content], { type: "text/calendar" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+    </script>
+</body>
+</html>
