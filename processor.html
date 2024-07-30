@@ -1,184 +1,353 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Calendar ICS File Chronological Sorter</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            line-height: 1.6;
-            color: #333;
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 20px;
-        }
-        .container {
-            background-color: #f4f4f4;
-            padding: 20px;
-            border-radius: 5px;
-        }
-        h1 {
-            color: #2c3e50;
-        }
-        .file-input-wrapper {
-            margin: 20px 0;
-        }
-        button {
-            background-color: #3498db;
-            color: white;
-            padding: 10px 20px;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-        }
-        button:hover {
-            background-color: #2980b9;
-        }
-        #results {
-            margin-top: 20px;
-        }
-        footer {
-            margin-top: 20px;
-            text-align: center;
-            font-size: 0.9em;
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>Calendar ICS File Chronological Sorter</h1>
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>ICS File Processor</title>
+		<script src="https://cdn.jsdelivr.net/npm/ical.js@1.5.0/build/ical.min.js"></script>
+		<link
+			href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;700&display=swap"
+			rel="stylesheet"
+		/>
+		<style>
+			body {
+				font-family: "Roboto", Arial, sans-serif;
+				max-width: 800px;
+				margin: 0 auto;
+				padding: 20px;
+				background-color: #f5f5f5;
+				color: #333;
+			}
 
-        <p>This tool is designed to assist with calendar migration efforts by sorting VEVENT entries in an ICS file chronologically. It's particularly useful for ensuring that recurring events and their exceptions are in the correct order, which can prevent import issues when RECURRENCE entries refer to base events.</p>
+			.container {
+				background-color: white;
+				padding: 30px;
+				border-radius: 8px;
+				box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+			}
 
-        <div class="file-input-wrapper">
-            <button onclick="document.getElementById('fileInput').click()">Select ICS File</button>
-            <input type="file" accept=".ics" id="fileInput" style="display: none;" onchange="handleFileSelect(event)">
-        </div>
+			h1 {
+				color: #2c3e50;
+				margin-bottom: 20px;
+			}
 
-        <div id="results"></div>
-    </div>
+			p {
+				line-height: 1.6;
+				color: #555;
+			}
 
-    <footer>
-        Made by <a href="https://linjin.me" target="_blank">Jin</a>, with <a href="https://www.anthropic.com/news/claude-3-5-sonnet" target="_blank">Claude 3.5 Sonnet</a>
-    </footer>
+			.file-input-wrapper {
+				display: flex;
+				align-items: center;
+				margin-bottom: 20px;
+			}
 
-    <script>
-        function handleFileSelect(event) {
-            const file = event.target.files[0];
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    const contents = e.target.result;
-                    const sortedContents = sortICSFile(contents);
-                    offerDownload(sortedContents, file.name);
-                };
-                reader.readAsText(file);
-            }
-        }
-				function sortICSFile(contents) {
-            const lines = contents.split(/\r\n|\n/);
-            const components = parseComponents(lines);
-            const sortedComponents = sortComponents(components);
-            return rebuildICSFile(sortedComponents);
-        }
+			#fileInput {
+				flex-grow: 1;
+				padding: 10px;
+				border: 1px solid #ddd;
+				border-radius: 4px;
+			}
 
-        function parseComponents(lines) {
-            const components = [];
-            let currentComponent = null;
-            let stack = [];
+			button {
+				background-color: #3498db;
+				color: white;
+				border: none;
+				padding: 10px 20px;
+				border-radius: 4px;
+				cursor: pointer;
+				transition: background-color 0.3s;
+			}
 
-            for (const line of lines) {
-                if (line.startsWith('BEGIN:')) {
-                    const newComponent = { type: line.split(':')[1], lines: [line], children: [] };
-                    if (currentComponent) {
-                        currentComponent.children.push(newComponent);
-                        stack.push(currentComponent);
-                    } else {
-                        components.push(newComponent);
-                    }
-                    currentComponent = newComponent;
-                } else if (line.startsWith('END:')) {
-                    currentComponent.lines.push(line);
-                    if (stack.length > 0) {
-                        currentComponent = stack.pop();
-                    } else {
-                        currentComponent = null;
-                    }
-                } else if (currentComponent) {
-                    currentComponent.lines.push(line);
-                }
-            }
+			button:hover {
+				background-color: #2980b9;
+			}
 
-            return components;
-        }
+			button:disabled {
+				background-color: #bdc3c7;
+				cursor: not-allowed;
+			}
 
-        function sortComponents(components) {
-            return components.map(component => {
-                if (component.type === 'VCALENDAR') {
-                    const events = component.children.filter(child => child.type === 'VEVENT');
-                    const sortedEvents = sortEvents(events);
-                    component.children = component.children.filter(child => child.type !== 'VEVENT').concat(sortedEvents);
-                }
-                component.children = sortComponents(component.children);
-                return component;
-            });
-        }
+			#summary {
+				margin-top: 30px;
+				background-color: #f0f0f0;
+				padding: 15px;
+				border-radius: 5px;
+			}
 
-        function sortEvents(events) {
-            const eventGroups = groupRelatedEvents(events);
-            return eventGroups.sort((a, b) => {
-                const aStart = getEventStart(a[0]);
-                const bStart = getEventStart(b[0]);
-                return aStart.localeCompare(bStart);
-            }).flat();
-        }
+			#downloadButton {
+				font-size: 1.1em;
+				padding: 12px 24px;
+				margin-top: 20px;
+			}
 
-        function groupRelatedEvents(events) {
-            const groups = new Map();
-            for (const event of events) {
-                const recurrenceId = event.lines.find(line => line.startsWith('RECURRENCE-ID'));
-                const uid = event.lines.find(line => line.startsWith('UID:'))?.split(':')[1];
-                if (recurrenceId && uid) {
-                    if (!groups.has(uid)) {
-                        groups.set(uid, []);
-                    }
-                    groups.get(uid).push(event);
-                } else {
-                    groups.set(event, [event]);
-                }
-            }
-            return Array.from(groups.values());
-        }
+			footer {
+				text-align: center;
+				margin-top: 30px;
+				color: #7f8c8d;
+				font-size: 0.9em;
+			}
 
-        function getEventStart(event) {
-            return event.lines.find(line => line.startsWith('DTSTART'))?.split(':')[1] || '';
-        }
+			footer a {
+				color: #3498db;
+				text-decoration: none;
+			}
 
-        function rebuildICSFile(components) {
-            return components.map(component => rebuildComponent(component)).join('\n');
-        }
+			footer a:visited {
+				color: #3498db;
+			}
 
-        function rebuildComponent(component) {
-            return [
-                ...component.lines.slice(0, -1),
-                ...component.children.map(child => rebuildComponent(child)),
-                component.lines[component.lines.length - 1]
-            ].join('\n');
-        }
+			footer a:hover {
+				text-decoration: underline;
+			}
+		</style>
+	</head>
+	<body>
+		<div class="container">
+			<h1>ICS File Processor</h1>
+			<p>
+				This tool processes and cleans ICS files, sorting events chronologically
+				and ensuring recurring events appear before their exceptions. It removes
+				non-standard properties and provides a summary of the processed
+				calendar.
+			</p>
+			<div class="file-input-wrapper">
+				<input type="file" id="fileInput" accept=".ics" />
+			</div>
+			<button id="downloadButton" style="display: none">
+				Download Processed ICS
+			</button>
+			<div id="summary" style="display: none"></div>
+		</div>
+		<footer>
+			Made by <a href="https://linjin.me" target="_blank">Jin</a>, with
+			<a href="https://www.anthropic.com/news/claude-3-5-sonnet" target="_blank"
+				>Claude 3.5 Sonnet</a
+			>
+		</footer>
 
-        function offerDownload(contents, originalFilename) {
-            const blob = new Blob([contents], { type: 'text/calendar' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `sorted_${originalFilename}`;
-            a.textContent = 'Download Sorted ICS File';
-            
-            const results = document.getElementById('results');
-            results.innerHTML = '';
-            results.appendChild(a);
-        }
-    </script>
-</body>
+		<script>
+			const fileInput = document.getElementById("fileInput");
+			const downloadButton = document.getElementById("downloadButton");
+			const summaryDiv = document.getElementById("summary");
+			let processedCalendar;
+
+			fileInput.addEventListener("change", handleFileUpload);
+			downloadButton.addEventListener("click", downloadProcessedFile);
+
+			function handleFileUpload(event) {
+				const file = event.target.files[0];
+				const reader = new FileReader();
+
+				reader.onload = function (e) {
+					const icsData = e.target.result;
+					processIcsFile(icsData);
+				};
+
+				reader.readAsText(file);
+			}
+
+			function generateNewUID() {
+				return (
+					"UID_" + Math.random().toString(36).substr(2, 9) + "_" + Date.now()
+				);
+			}
+			function cleanComponent(component) {
+				const standardProps = {
+					vevent: [
+						"uid",
+						"dtstart",
+						"dtend",
+						"summary",
+						"description",
+						"location",
+						"url",
+						"rrule",
+						"recurrence-id",
+						"sequence",
+						"status",
+						"transp",
+						"organizer",
+						"attendee",
+						"created",
+						"last-modified",
+						"dtstamp",
+					],
+				};
+
+				// If the component is not in our standardProps, return it as is
+				if (!standardProps.hasOwnProperty(component.name.toLowerCase())) {
+					return component;
+				}
+
+				const cleanedComponent = new ICAL.Component(component.jCal);
+				const componentProps =
+					standardProps[component.name.toLowerCase()] || [];
+				const cleanedProps = component
+					.getAllProperties()
+					.filter(
+						(prop) =>
+							componentProps.includes(prop.name.toLowerCase()) &&
+							!prop.name.startsWith("x-")
+					);
+
+				cleanedComponent.removeAllProperties();
+				cleanedProps.forEach((prop) => cleanedComponent.addProperty(prop));
+
+				// Clean subcomponents recursively
+				component.getAllSubcomponents().forEach((subcomp) => {
+					cleanedComponent.addSubcomponent(cleanComponent(subcomp));
+				});
+
+				return cleanedComponent;
+			}
+
+			function processIcsFile(icsData) {
+				const jcalData = ICAL.parse(icsData);
+				const comp = new ICAL.Component(jcalData);
+
+				// Create a new calendar component
+				processedCalendar = new ICAL.Component(["vcalendar", [], []]);
+
+				// Copy only standard properties from the original calendar
+				const standardCalendarProps = [
+					"prodid",
+					"version",
+					"calscale",
+					"method",
+				];
+				standardCalendarProps.forEach((propName) => {
+					const prop = comp.getFirstProperty(propName);
+					if (prop) {
+						processedCalendar.addProperty(prop);
+					}
+				});
+
+				// Process and add all components
+				const components = comp.getAllSubcomponents();
+				const vtimezones = [];
+				const vevents = [];
+				const otherComponents = [];
+
+				components.forEach((component) => {
+					if (component.name === "vtimezone") {
+						vtimezones.push(cleanComponent(component));
+					} else if (component.name === "vevent") {
+						const cleanedEvent = cleanComponent(component);
+						vevents.push(cleanedEvent);
+					} else {
+						otherComponents.push(cleanComponent(component));
+					}
+				});
+
+				// Add VTIMEZONE components first
+				vtimezones.forEach((vtimezone) => {
+					processedCalendar.addSubcomponent(vtimezone);
+				});
+
+				// Sort events chronologically
+				vevents.sort((a, b) => {
+					const dateA = a.getFirstPropertyValue("dtstart");
+					const dateB = b.getFirstPropertyValue("dtstart");
+					return dateA.compare(dateB);
+				});
+
+				// Ensure recurring events appear before their exceptions
+				const recurringEvents = new Map();
+				const normalEvents = [];
+
+				vevents.forEach((vevent) => {
+					const uid = vevent.getFirstPropertyValue("uid");
+					const recurrenceId = vevent.getFirstPropertyValue("recurrence-id");
+					const rrule = vevent.getFirstPropertyValue("rrule");
+
+					if (rrule) {
+						if (!recurringEvents.has(uid)) {
+							recurringEvents.set(uid, { base: vevent, exceptions: [] });
+						} else {
+							recurringEvents.get(uid).base = vevent;
+						}
+					} else if (recurrenceId) {
+						if (!recurringEvents.has(uid)) {
+							recurringEvents.set(uid, { base: null, exceptions: [vevent] });
+						} else {
+							recurringEvents.get(uid).exceptions.push(vevent);
+						}
+					} else {
+						normalEvents.push(vevent);
+					}
+				});
+
+				// Add normal events
+				normalEvents.forEach((event) => {
+					processedCalendar.addSubcomponent(event);
+				});
+
+				// Add recurring events and their exceptions
+				recurringEvents.forEach(({ base, exceptions }) => {
+					if (base) {
+						processedCalendar.addSubcomponent(base);
+					}
+					exceptions.forEach((exception) => {
+						processedCalendar.addSubcomponent(exception);
+					});
+				});
+
+				// Add all other components
+				otherComponents.forEach((component) => {
+					processedCalendar.addSubcomponent(component);
+				});
+
+				// Display summary
+				displaySummary(
+					vtimezones,
+					recurringEvents,
+					normalEvents,
+					otherComponents
+				);
+
+				downloadButton.style.display = "block";
+			}
+
+			function displaySummary(
+				vtimezones,
+				recurringEvents,
+				normalEvents,
+				otherComponents
+			) {
+				const totalEvents = recurringEvents.size + normalEvents.length;
+				const recurringEventsCount = recurringEvents.size;
+				const recurringInstancesCount = Array.from(
+					recurringEvents.values()
+				).reduce((sum, { exceptions }) => sum + exceptions.length, 0);
+
+				let summaryHtml = `
+    <h2>Summary</h2>
+    <p>Total events: ${totalEvents}</p>
+    <p>Normal events: ${normalEvents.length}</p>
+    <p>Recurring events: ${recurringEventsCount}</p>
+    <p>Recurring event instances: ${recurringInstancesCount}</p>
+    <p>Timezones: ${vtimezones.length}</p>
+    <p>Other components: ${otherComponents.length}</p>
+  `;
+
+				summaryDiv.innerHTML = summaryHtml;
+				summaryDiv.style.display = "block";
+			}
+
+			function downloadProcessedFile() {
+				const icsData = processedCalendar.toString();
+				const blob = new Blob([icsData], { type: "text/calendar" });
+				const url = URL.createObjectURL(blob);
+
+				const a = document.createElement("a");
+				a.href = url;
+				a.download = "processed_calendar.ics";
+				document.body.appendChild(a);
+				a.click();
+				document.body.removeChild(a);
+				URL.revokeObjectURL(url);
+			}
+		</script>
+	</body>
 </html>
