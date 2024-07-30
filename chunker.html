@@ -178,9 +178,9 @@
 			};
 
 			const CHUNKING_CONFIG = {
-				strategy: CHUNKING_STRATEGIES.SIZE, // Default strategy
-				sizeLimit: 450 * 1024, // 450KB in bytes
-				countLimit: 500, // Number of events per chunk (for count-based strategy)
+				strategy: CHUNKING_STRATEGIES.COUNT, // Default strategy
+				sizeLimit: 2000 * 1024, // 2000KB in bytes
+				countLimit: 1500, // Number of events per chunk (for count-based strategy)
 			};
 
 			let originalFileName = "";
