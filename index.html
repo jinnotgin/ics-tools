@@ -134,12 +134,12 @@
 			}
 
 			footer a {
-				color: #3498db; /* Set your desired color here */
+				color: #3498db;
 				text-decoration: none;
 			}
 
 			footer a:visited {
-				color: #3498db; /* Same color as non-visited links */
+				color: #3498db;
 			}
 
 			footer a:hover {
@@ -171,7 +171,18 @@
 		</footer>
 		<script>
 			// Configuration
-			let CHUNK_SIZE = 500; // Number of events per chunk
+			const CHUNKING_STRATEGIES = {
+				SIZE: "size",
+				COUNT: "count",
+				// Add more strategies here in the future
+			};
+
+			const CHUNKING_CONFIG = {
+				strategy: CHUNKING_STRATEGIES.SIZE, // Default strategy
+				sizeLimit: 450 * 1024, // 450KB in bytes
+				countLimit: 500, // Number of events per chunk (for count-based strategy)
+			};
+
 			let originalFileName = "";
 
 			// Main processing function
@@ -182,7 +193,10 @@
 						throw new Error("Invalid ICS file");
 					}
 					const { globalInfo, components } = parseICSFile(content);
-					const chunkedComponents = chunkComponents(components, CHUNK_SIZE);
+					const chunkedComponents = chunkComponents(
+						components,
+						CHUNKING_CONFIG
+					);
 					const icsFiles = generateICSFiles(globalInfo, chunkedComponents);
 					displayResults(icsFiles);
 				} catch (error) {
@@ -240,13 +254,52 @@
 				return { globalInfo: globalInfo.join("\r\n"), components };
 			}
 
-			// Component chunking function
-			function chunkComponents(components, chunkSize) {
+			// Main chunking function
+			function chunkComponents(components, config) {
+				switch (config.strategy) {
+					case CHUNKING_STRATEGIES.SIZE:
+						return chunkComponentsBySize(components, config.sizeLimit);
+					case CHUNKING_STRATEGIES.COUNT:
+						return chunkComponentsByCount(components, config.countLimit);
+					// Add more cases for future strategies
+					default:
+						throw new Error("Invalid chunking strategy");
+				}
+			}
+
+			// Component chunking function by count
+			function chunkComponentsByCount(components, chunkSize) {
 				const chunkedComponents = {};
 				for (const [type, items] of Object.entries(components)) {
 					chunkedComponents[type] = [];
 					for (let i = 0; i < items.length; i += chunkSize) {
 						chunkedComponents[type].push(items.slice(i, i + chunkSize));
+					}
+				}
+				return chunkedComponents;
+			}
+
+			// Component chunking function by size
+			function chunkComponentsBySize(components, maxSize) {
+				const chunkedComponents = {};
+				for (const [type, items] of Object.entries(components)) {
+					chunkedComponents[type] = [];
+					let currentChunk = [];
+					let currentSize = 0;
+
+					for (const item of items) {
+						const itemSize = new Blob([item]).size;
+						if (currentSize + itemSize > maxSize && currentChunk.length > 0) {
+							chunkedComponents[type].push(currentChunk);
+							currentChunk = [];
+							currentSize = 0;
+						}
+						currentChunk.push(item);
+						currentSize += itemSize;
+					}
+
+					if (currentChunk.length > 0) {
+						chunkedComponents[type].push(currentChunk);
 					}
 				}
 				return chunkedComponents;
@@ -281,7 +334,13 @@
 				const descriptor = document.createElement("p");
 				descriptor.innerHTML = `
         The original ICS file has been split into ${icsFiles.length} chunks, 
-        each containing up to ${CHUNK_SIZE} events. You can download individual chunks or all chunks 
+        ${
+					CHUNKING_CONFIG.strategy === CHUNKING_STRATEGIES.COUNT
+						? `each containing up to ${CHUNKING_CONFIG.countLimit} events.`
+						: `each up to approximately ${
+								CHUNKING_CONFIG.sizeLimit / 1024
+						  }KB in size.`
+				} You can download individual chunks or all chunks 
         as a zip file.
     `;
 				resultsDiv.appendChild(descriptor);
