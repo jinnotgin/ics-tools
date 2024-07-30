@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calendar ICS File Chronological Sorter</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .container {
+            background-color: #f4f4f4;
+            padding: 20px;
+            border-radius: 5px;
+        }
+        h1 {
+            color: #2c3e50;
+        }
+        .file-input-wrapper {
+            margin: 20px 0;
+        }
+        button {
+            background-color: #3498db;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #2980b9;
+        }
+        #results {
+            margin-top: 20px;
+        }
+        footer {
+            margin-top: 20px;
+            text-align: center;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Calendar ICS File Chronological Sorter</h1>
+
+        <p>This tool is designed to assist with calendar migration efforts by sorting VEVENT entries in an ICS file chronologically. It's particularly useful for ensuring that recurring events and their exceptions are in the correct order, which can prevent import issues when RECURRENCE entries refer to base events.</p>
+
+        <div class="file-input-wrapper">
+            <button onclick="document.getElementById('fileInput').click()">Select ICS File</button>
+            <input type="file" accept=".ics" id="fileInput" style="display: none;" onchange="handleFileSelect(event)">
+        </div>
+
+        <div id="results"></div>
+    </div>
+
+    <footer>
+        Made by <a href="https://linjin.me" target="_blank">Jin</a>, with <a href="https://www.anthropic.com/news/claude-3-5-sonnet" target="_blank">Claude 3.5 Sonnet</a>
+    </footer>
+
+    <script>
+        function handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const contents = e.target.result;
+                    const sortedContents = sortICSFile(contents);
+                    offerDownload(sortedContents, file.name);
+                };
+                reader.readAsText(file);
+            }
+        }
+				function sortICSFile(contents) {
+            const lines = contents.split(/\r\n|\n/);
+            const components = parseComponents(lines);
+            const sortedComponents = sortComponents(components);
+            return rebuildICSFile(sortedComponents);
+        }
+
+        function parseComponents(lines) {
+            const components = [];
+            let currentComponent = null;
+            let stack = [];
+
+            for (const line of lines) {
+                if (line.startsWith('BEGIN:')) {
+                    const newComponent = { type: line.split(':')[1], lines: [line], children: [] };
+                    if (currentComponent) {
+                        currentComponent.children.push(newComponent);
+                        stack.push(currentComponent);
+                    } else {
+                        components.push(newComponent);
+                    }
+                    currentComponent = newComponent;
+                } else if (line.startsWith('END:')) {
+                    currentComponent.lines.push(line);
+                    if (stack.length > 0) {
+                        currentComponent = stack.pop();
+                    } else {
+                        currentComponent = null;
+                    }
+                } else if (currentComponent) {
+                    currentComponent.lines.push(line);
+                }
+            }
+
+            return components;
+        }
+
+        function sortComponents(components) {
+            return components.map(component => {
+                if (component.type === 'VCALENDAR') {
+                    const events = component.children.filter(child => child.type === 'VEVENT');
+                    const sortedEvents = sortEvents(events);
+                    component.children = component.children.filter(child => child.type !== 'VEVENT').concat(sortedEvents);
+                }
+                component.children = sortComponents(component.children);
+                return component;
+            });
+        }
+
+        function sortEvents(events) {
+            const eventGroups = groupRelatedEvents(events);
+            return eventGroups.sort((a, b) => {
+                const aStart = getEventStart(a[0]);
+                const bStart = getEventStart(b[0]);
+                return aStart.localeCompare(bStart);
+            }).flat();
+        }
+
+        function groupRelatedEvents(events) {
+            const groups = new Map();
+            for (const event of events) {
+                const recurrenceId = event.lines.find(line => line.startsWith('RECURRENCE-ID'));
+                const uid = event.lines.find(line => line.startsWith('UID:'))?.split(':')[1];
+                if (recurrenceId && uid) {
+                    if (!groups.has(uid)) {
+                        groups.set(uid, []);
+                    }
+                    groups.get(uid).push(event);
+                } else {
+                    groups.set(event, [event]);
+                }
+            }
+            return Array.from(groups.values());
+        }
+
+        function getEventStart(event) {
+            return event.lines.find(line => line.startsWith('DTSTART'))?.split(':')[1] || '';
+        }
+
+        function rebuildICSFile(components) {
+            return components.map(component => rebuildComponent(component)).join('\n');
+        }
+
+        function rebuildComponent(component) {
+            return [
+                ...component.lines.slice(0, -1),
+                ...component.children.map(child => rebuildComponent(child)),
+                component.lines[component.lines.length - 1]
+            ].join('\n');
+        }
+
+        function offerDownload(contents, originalFilename) {
+            const blob = new Blob([contents], { type: 'text/calendar' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `sorted_${originalFilename}`;
+            a.textContent = 'Download Sorted ICS File';
+            
+            const results = document.getElementById('results');
+            results.innerHTML = '';
+            results.appendChild(a);
+        }
+    </script>
+</body>
+</html>
