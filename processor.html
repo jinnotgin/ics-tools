@@ -340,9 +340,15 @@
 				const blob = new Blob([icsData], { type: "text/calendar" });
 				const url = URL.createObjectURL(blob);
 
+				const originalFileName = fileInput.files[0].name;
+				const processedFileName = originalFileName.replace(
+					".ics",
+					"_processed.ics"
+				);
+
 				const a = document.createElement("a");
 				a.href = url;
-				a.download = "processed_calendar.ics";
+				a.download = processedFileName;
 				document.body.appendChild(a);
 				a.click();
 				document.body.removeChild(a);
