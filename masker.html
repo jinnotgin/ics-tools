@@ -48,7 +48,7 @@
             // Function to replace email with a dummy
             function replaceEmail(match) {
                 if (!emailMap.has(match)) {
-                    emailMap.set(match, `dummy${counter}@example.com`);
+                    emailMap.set(match, `dummy${counter}@domain.tld`);
                     counter++;
                 }
                 return emailMap.get(match);
