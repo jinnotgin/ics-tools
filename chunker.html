@@ -4,6 +4,7 @@
 		<meta charset="UTF-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 		<title>Calendar ICS File Chunker</title>
+		<script src="https://cdn.jsdelivr.net/npm/ical.js@1.5.0/build/ical.min.js"></script>
 		<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.7.1/jszip.min.js"></script>
 		<script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
 		<link
@@ -39,6 +40,7 @@
 
 			.file-input-wrapper {
 				display: flex;
+				flex-direction: column;
 				align-items: center;
 				margin-bottom: 20px;
 				gap: 0.5rem;
@@ -145,6 +147,45 @@
 			footer a:hover {
 				text-decoration: underline;
 			}
+			.form-container {
+				background-color: #f9f9f9;
+				padding: 20px;
+				border-radius: 8px;
+				margin-bottom: 20px;
+			}
+
+			.form-group {
+				margin-bottom: 15px;
+			}
+
+			.form-group label {
+				display: block;
+				margin-bottom: 5px;
+				font-weight: bold;
+			}
+
+			.form-group input {
+				width: 100%;
+				padding: 10px;
+				border: 1px solid #ddd;
+				border-radius: 4px;
+				font-size: 16px;
+			}
+
+			.form-group input[type="file"] {
+				padding: 10px 0;
+			}
+
+			#processButton {
+				width: 100%;
+				font-size: 18px;
+				padding: 12px;
+				margin-top: 10px;
+			}
+
+			.hidden {
+				display: none;
+			}
 		</style>
 	</head>
 	<body>
@@ -157,8 +198,20 @@
 				of events and need to be split for easier processing or import into
 				other systems.
 			</p>
-			<div class="file-input-wrapper">
-				<input type="file" id="icsFileInput" accept=".ics" />
+			<div id="formContainer" class="form-container">
+				<div class="form-group">
+					<label for="emailInput">Ufinity Email:</label>
+					<input
+						type="email"
+						id="emailInput"
+						placeholder="username@ufinity.com"
+						required
+					/>
+				</div>
+				<div class="form-group">
+					<label for="icsFileInput">Select ICS File:</label>
+					<input type="file" id="icsFileInput" accept=".ics" />
+				</div>
 				<button id="processButton">Process File</button>
 			</div>
 			<div id="results"></div>
@@ -174,34 +227,111 @@
 			const CHUNKING_STRATEGIES = {
 				SIZE: "size",
 				COUNT: "count",
-				// Add more strategies here in the future
 			};
 
 			const CHUNKING_CONFIG = {
-				strategy: CHUNKING_STRATEGIES.COUNT, // Default strategy
+				strategy: CHUNKING_STRATEGIES.COUNT,
 				sizeLimit: 2000 * 1024, // 2000KB in bytes
-				countLimit: 1500, // Number of events per chunk (for count-based strategy)
+				countLimit: 1500, // Number of events per chunk
 			};
 
 			let originalFileName = "";
 
+			function validateEmail(email) {
+				return email.endsWith("@ufinity.com");
+			}
+
 			// Main processing function
 			async function processICSFile(file) {
+				const emailInput = document.getElementById("emailInput");
+				const email = emailInput.value.trim();
+
+				if (!validateEmail(email)) {
+					alert(
+						"Please enter a valid Ufinity email address (ending with @ufinity.com)."
+					);
+					return;
+				}
+
 				try {
 					const content = await readFile(file);
-					if (!isValidICSFile(content)) {
+					const jcalData = ICAL.parse(content);
+					const comp = new ICAL.Component(jcalData);
+
+					if (!isValidICSFile(comp)) {
 						throw new Error("Invalid ICS file");
 					}
-					const { globalInfo, components } = parseICSFile(content);
-					const chunkedComponents = chunkComponents(
-						components,
-						CHUNKING_CONFIG
-					);
-					const icsFiles = generateICSFiles(globalInfo, chunkedComponents);
+
+					const chunkedComponents = chunkComponents(comp, CHUNKING_CONFIG);
+					const icsFiles = generateICSFiles(chunkedComponents, email);
 					displayResults(icsFiles);
 				} catch (error) {
-					alert(`Error: ${error.message}`);
+					console.error(`Error:`, error);
 				}
+			}
+
+			function addImportCompleteEvent(
+				component,
+				email,
+				chunkNumber,
+				totalChunks
+			) {
+				const now = new Date();
+				const startDate = new Date(
+					now.getFullYear(),
+					now.getMonth(),
+					now.getDate()
+				);
+				const endDate = new Date(startDate);
+				endDate.setDate(endDate.getDate() + 1);
+
+				const specialEvent = new ICAL.Component("vevent");
+				specialEvent.addPropertyWithValue("uid", generateNewUID());
+				specialEvent.addPropertyWithValue(
+					"summary",
+					`Chunk ${chunkNumber} of ${totalChunks} Import Completed`
+				);
+				specialEvent.addPropertyWithValue(
+					"dtstart",
+					ICAL.Time.fromJSDate(startDate, true)
+				);
+				specialEvent.addPropertyWithValue(
+					"dtend",
+					ICAL.Time.fromJSDate(endDate, true)
+				);
+				specialEvent.addPropertyWithValue("status", "CONFIRMED");
+				specialEvent.addPropertyWithValue("class", "PUBLIC");
+				specialEvent.addPropertyWithValue("transp", "TRANSPARENT");
+				specialEvent.addPropertyWithValue("last-modified", ICAL.Time.now());
+				specialEvent.addPropertyWithValue("dtstamp", ICAL.Time.now());
+				specialEvent.addPropertyWithValue("sequence", 0);
+
+				const alarm = new ICAL.Component("valarm");
+				alarm.addPropertyWithValue("action", "EMAIL");
+				alarm.addPropertyWithValue("trigger", "-P1DT7H");
+				alarm.addPropertyWithValue(
+					"description",
+					`Chunk ${chunkNumber} of ${totalChunks} has been imported successfully.`
+				);
+				alarm.addPropertyWithValue("summary", "Reminder");
+				alarm.addPropertyWithValue("attendee", `mailto:${email}`);
+
+				specialEvent.addSubcomponent(alarm);
+				component.addSubcomponent(specialEvent);
+			}
+
+			function generateNewUID() {
+				return (
+					"SYNTHETIC-" +
+					Math.random().toString(36).substr(2, 9) +
+					"-" +
+					([1e7] + -1e3 + -4e3 + -8e3 + -1e11).replace(/[018]/g, (c) =>
+						(
+							c ^
+							(crypto.getRandomValues(new Uint8Array(1))[0] & (15 >> (c / 4)))
+						).toString(16)
+					)
+				);
 			}
 
 			// File reading function
@@ -215,134 +345,160 @@
 			}
 
 			// ICS file validation function
-			function isValidICSFile(content) {
-				return (
-					content.trim().startsWith("BEGIN:VCALENDAR") &&
-					content.trim().endsWith("END:VCALENDAR")
-				);
-			}
-
-			// ICS file parsing function
-			function parseICSFile(content) {
-				const lines = content.split(/\r\n|\n|\r/);
-				let globalInfo = [];
-				let components = { VEVENT: [], VTODO: [], VJOURNAL: [], VFREEBUSY: [] };
-				let currentComponent = null;
-				let inComponent = false;
-				let currentType = null;
-
-				for (const line of lines) {
-					if (
-						line.startsWith("BEGIN:") &&
-						components.hasOwnProperty(line.split(":")[1])
-					) {
-						inComponent = true;
-						currentType = line.split(":")[1];
-						currentComponent = [line];
-					} else if (line.startsWith(`END:${currentType}`)) {
-						currentComponent.push(line);
-						components[currentType].push(currentComponent.join("\r\n"));
-						inComponent = false;
-						currentType = null;
-					} else if (inComponent) {
-						currentComponent.push(line);
-					} else {
-						globalInfo.push(line);
-					}
-				}
-
-				return { globalInfo: globalInfo.join("\r\n"), components };
+			function isValidICSFile(component) {
+				return component.name === "vcalendar";
 			}
 
 			// Main chunking function
-			function chunkComponents(components, config) {
+			function chunkComponents(component, config) {
+				const components = component.getAllSubcomponents();
+				const events = components.filter((c) => c.name === "vevent");
+				const otherComponents = components.filter((c) => c.name !== "vevent");
+
 				switch (config.strategy) {
 					case CHUNKING_STRATEGIES.SIZE:
-						return chunkComponentsBySize(components, config.sizeLimit);
+						return chunkComponentsBySize(
+							component,
+							events,
+							otherComponents,
+							config.sizeLimit
+						);
 					case CHUNKING_STRATEGIES.COUNT:
-						return chunkComponentsByCount(components, config.countLimit);
-					// Add more cases for future strategies
+						return chunkComponentsByCount(
+							component,
+							events,
+							otherComponents,
+							config.countLimit
+						);
 					default:
 						throw new Error("Invalid chunking strategy");
 				}
 			}
 
-			// Component chunking function by count
-			function chunkComponentsByCount(components, chunkSize) {
-				const chunkedComponents = {};
-				for (const [type, items] of Object.entries(components)) {
-					chunkedComponents[type] = [];
-					for (let i = 0; i < items.length; i += chunkSize) {
-						chunkedComponents[type].push(items.slice(i, i + chunkSize));
-					}
+			// Deep clone an ICAL.Component or ICAL.Property
+			function deepClone(obj) {
+				if (obj instanceof ICAL.Component) {
+					const newComp = new ICAL.Component(obj.jCal[0]);
+					obj.getAllProperties().forEach((prop) => {
+						newComp.addProperty(deepClone(prop));
+					});
+					obj.getAllSubcomponents().forEach((subcomp) => {
+						newComp.addSubcomponent(deepClone(subcomp));
+					});
+					return newComp;
+				} else if (obj instanceof ICAL.Property) {
+					return new ICAL.Property(obj.toJSON());
+				} else {
+					return obj; // For other types, return as is
 				}
-				return chunkedComponents;
+			}
+
+			// Create a new chunk with all properties and non-event components
+			function createNewChunk(originalComponent, otherComponents) {
+				const newChunk = new ICAL.Component(["vcalendar", [], []]);
+
+				// Copy properties from the original calendar
+				originalComponent.getAllProperties().forEach((prop) => {
+					newChunk.addProperty(deepClone(prop));
+				});
+
+				// Add other components to the chunk
+				otherComponents.forEach((comp) => {
+					newChunk.addSubcomponent(deepClone(comp));
+				});
+
+				return newChunk;
+			}
+
+			// Component chunking function by count
+			function chunkComponentsByCount(
+				component,
+				events,
+				otherComponents,
+				chunkSize
+			) {
+				const chunks = [];
+				for (let i = 0; i < events.length; i += chunkSize) {
+					const chunkEvents = events.slice(i, i + chunkSize);
+					const newChunk = createNewChunk(component, otherComponents);
+
+					// Add events for this chunk
+					chunkEvents.forEach((event) => {
+						newChunk.addSubcomponent(deepClone(event));
+					});
+
+					chunks.push(newChunk);
+				}
+				return chunks;
 			}
 
 			// Component chunking function by size
-			function chunkComponentsBySize(components, maxSize) {
-				const chunkedComponents = {};
-				for (const [type, items] of Object.entries(components)) {
-					chunkedComponents[type] = [];
-					let currentChunk = [];
-					let currentSize = 0;
+			function chunkComponentsBySize(
+				component,
+				events,
+				otherComponents,
+				maxSize
+			) {
+				const chunks = [];
+				let currentChunk = createNewChunk(component, otherComponents);
+				let currentSize = new Blob([currentChunk.toString()]).size;
 
-					for (const item of items) {
-						const itemSize = new Blob([item]).size;
-						if (currentSize + itemSize > maxSize && currentChunk.length > 0) {
-							chunkedComponents[type].push(currentChunk);
-							currentChunk = [];
-							currentSize = 0;
-						}
-						currentChunk.push(item);
-						currentSize += itemSize;
+				for (const event of events) {
+					const eventSize = new Blob([event.toString()]).size;
+					if (
+						currentSize + eventSize > maxSize &&
+						currentChunk.getAllSubcomponents("vevent").length > 0
+					) {
+						chunks.push(currentChunk);
+						currentChunk = createNewChunk(component, otherComponents);
+						currentSize = new Blob([currentChunk.toString()]).size;
 					}
-
-					if (currentChunk.length > 0) {
-						chunkedComponents[type].push(currentChunk);
-					}
+					currentChunk.addSubcomponent(deepClone(event));
+					currentSize += eventSize;
 				}
-				return chunkedComponents;
+
+				if (currentChunk.getAllSubcomponents("vevent").length > 0) {
+					chunks.push(currentChunk);
+				}
+
+				return chunks;
 			}
 
 			// Generate ICS files function
-			function generateICSFiles(globalInfo, chunkedComponents) {
-				const allChunks = Object.values(chunkedComponents).flat();
-				return allChunks.map((chunk, index) => {
-					const content = [
-						"BEGIN:VCALENDAR",
-						...globalInfo
-							.split(/\r\n|\n|\r/)
-							.filter(
-								(line) =>
-									!line.startsWith("BEGIN:VCALENDAR") &&
-									!line.startsWith("END:VCALENDAR")
-							),
-						...chunk.flat(),
-						"END:VCALENDAR",
-					].join("\r\n");
+			function generateICSFiles(chunkedComponents, email) {
+				return chunkedComponents.map((chunk, index) => {
+					addImportCompleteEvent(
+						chunk,
+						email,
+						index + 1,
+						chunkedComponents.length
+					);
+					const content = chunk.toString();
 					return { name: `chunk_${index + 1}.ics`, content };
 				});
 			}
 
 			// Display results function
 			function displayResults(icsFiles) {
+				const formContainer = document.getElementById("formContainer");
+				formContainer.classList.add("hidden");
+
 				const resultsDiv = document.getElementById("results");
-				resultsDiv.innerHTML = "<h2>Chunked Files:</h2>";
+				resultsDiv.innerHTML = "<h2>Chunking Completed Successfully</h2>";
 
 				// Add descriptor about chunked files
 				const descriptor = document.createElement("p");
 				descriptor.innerHTML = `
-        The original ICS file has been split into ${icsFiles.length} chunks, 
-        ${
-					CHUNKING_CONFIG.strategy === CHUNKING_STRATEGIES.COUNT
-						? `each containing up to ${CHUNKING_CONFIG.countLimit} events.`
-						: `each up to approximately ${
-								CHUNKING_CONFIG.sizeLimit / 1024
-						  }KB in size.`
-				} You can download individual chunks or all chunks 
-        as a zip file.
-    `;
+					The original ICS file has been split into ${icsFiles.length} chunks, 
+					${
+						CHUNKING_CONFIG.strategy === CHUNKING_STRATEGIES.COUNT
+							? `each containing up to ${CHUNKING_CONFIG.countLimit} events.`
+							: `each up to approximately ${
+									CHUNKING_CONFIG.sizeLimit / 1024
+							  }KB in size.`
+					} You can download individual chunks or all chunks 
+					as a zip file.
+				`;
 				resultsDiv.appendChild(descriptor);
 
 				const chunkList = document.createElement("div");
@@ -412,13 +568,24 @@
 			// Event listeners
 			document.getElementById("processButton").addEventListener("click", () => {
 				const fileInput = document.getElementById("icsFileInput");
+				const emailInput = document.getElementById("emailInput");
 				const file = fileInput.files[0];
-				if (file) {
-					originalFileName = file.name;
-					processICSFile(file);
-				} else {
+				const email = emailInput.value.trim();
+
+				if (!file) {
 					alert("Please select an ICS file");
+					return;
 				}
+
+				if (!validateEmail(email)) {
+					alert(
+						"Please enter a valid Ufinity email address (ending with @ufinity.com)."
+					);
+					return;
+				}
+
+				originalFileName = file.name;
+				processICSFile(file);
 			});
 		</script>
 	</body>
