@@ -352,23 +352,25 @@
 
 			// Main chunking function
 			function chunkComponents(component, config) {
-				const components = component.getAllSubcomponents();
-				const events = components.filter((c) => c.name === "vevent");
-				const otherComponents = components.filter((c) => c.name !== "vevent");
+				const allComponents = component.getAllSubcomponents();
+				const timezones = allComponents.filter((c) => c.name === "vtimezone");
+				const otherComponents = allComponents.filter(
+					(c) => c.name !== "vtimezone"
+				);
 
 				switch (config.strategy) {
 					case CHUNKING_STRATEGIES.SIZE:
 						return chunkComponentsBySize(
 							component,
-							events,
 							otherComponents,
+							timezones,
 							config.sizeLimit
 						);
 					case CHUNKING_STRATEGIES.COUNT:
 						return chunkComponentsByCount(
 							component,
-							events,
 							otherComponents,
+							timezones,
 							config.countLimit
 						);
 					default:
@@ -394,8 +396,8 @@
 				}
 			}
 
-			// Create a new chunk with all properties and non-event components
-			function createNewChunk(originalComponent, otherComponents) {
+			// Create a new chunk with all properties and timezone components
+			function createNewChunk(originalComponent, timezones) {
 				const newChunk = new ICAL.Component(["vcalendar", [], []]);
 
 				// Copy properties from the original calendar
@@ -403,9 +405,9 @@
 					newChunk.addProperty(deepClone(prop));
 				});
 
-				// Add other components to the chunk
-				otherComponents.forEach((comp) => {
-					newChunk.addSubcomponent(deepClone(comp));
+				// Add timezone components to the chunk
+				timezones.forEach((timezone) => {
+					newChunk.addSubcomponent(deepClone(timezone));
 				});
 
 				return newChunk;
@@ -414,18 +416,18 @@
 			// Component chunking function by count
 			function chunkComponentsByCount(
 				component,
-				events,
 				otherComponents,
+				timezones,
 				chunkSize
 			) {
 				const chunks = [];
-				for (let i = 0; i < events.length; i += chunkSize) {
-					const chunkEvents = events.slice(i, i + chunkSize);
-					const newChunk = createNewChunk(component, otherComponents);
+				for (let i = 0; i < otherComponents.length; i += chunkSize) {
+					const chunkComponents = otherComponents.slice(i, i + chunkSize);
+					const newChunk = createNewChunk(component, timezones);
 
-					// Add events for this chunk
-					chunkEvents.forEach((event) => {
-						newChunk.addSubcomponent(deepClone(event));
+					// Add components for this chunk
+					chunkComponents.forEach((comp) => {
+						newChunk.addSubcomponent(deepClone(comp));
 					});
 
 					chunks.push(newChunk);
@@ -436,29 +438,29 @@
 			// Component chunking function by size
 			function chunkComponentsBySize(
 				component,
-				events,
 				otherComponents,
+				timezones,
 				maxSize
 			) {
 				const chunks = [];
-				let currentChunk = createNewChunk(component, otherComponents);
+				let currentChunk = createNewChunk(component, timezones);
 				let currentSize = new Blob([currentChunk.toString()]).size;
 
-				for (const event of events) {
-					const eventSize = new Blob([event.toString()]).size;
+				for (const comp of otherComponents) {
+					const compSize = new Blob([comp.toString()]).size;
 					if (
-						currentSize + eventSize > maxSize &&
-						currentChunk.getAllSubcomponents("vevent").length > 0
+						currentSize + compSize > maxSize &&
+						currentChunk.getAllSubcomponents().length > timezones.length
 					) {
 						chunks.push(currentChunk);
-						currentChunk = createNewChunk(component, otherComponents);
+						currentChunk = createNewChunk(component, timezones);
 						currentSize = new Blob([currentChunk.toString()]).size;
 					}
-					currentChunk.addSubcomponent(deepClone(event));
-					currentSize += eventSize;
+					currentChunk.addSubcomponent(deepClone(comp));
+					currentSize += compSize;
 				}
 
-				if (currentChunk.getAllSubcomponents("vevent").length > 0) {
+				if (currentChunk.getAllSubcomponents().length > timezones.length) {
 					chunks.push(currentChunk);
 				}
 
@@ -493,7 +495,7 @@
 					The original ICS file has been split into ${icsFiles.length} chunks, 
 					${
 						CHUNKING_CONFIG.strategy === CHUNKING_STRATEGIES.COUNT
-							? `each containing up to ${CHUNKING_CONFIG.countLimit} events.`
+							? `each containing up to ${CHUNKING_CONFIG.countLimit} components.`
 							: `each up to approximately ${
 									CHUNKING_CONFIG.sizeLimit / 1024
 							  }KB in size.`
