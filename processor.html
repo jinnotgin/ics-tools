@@ -520,7 +520,8 @@
 					now.getDate()
 				);
 				const endDate = new Date(startDate);
-				endDate.setDate(endDate.getDate() + 1);
+				endDate.setDate(endDate.getDate() + 2); // Add 2 days
+				endDate.setMinutes(endDate.getMinutes() - 1); // Subtract 1 minute, so we get "2359"
 
 				const specialEvent = new ICAL.Component("vevent");
 				specialEvent.addPropertyWithValue("uid", generateNewUID());
