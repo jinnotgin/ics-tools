@@ -1,565 +1,668 @@
 <!DOCTYPE html>
 <html lang="en">
-	<head>
-		<meta charset="UTF-8" />
-		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-		<title>ICS File Processor</title>
-		<script src="https://cdn.jsdelivr.net/npm/ical.js@1.5.0/build/ical.min.js"></script>
-		<link
-			href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;700&display=swap"
-			rel="stylesheet"
-		/>
-		<style>
-			body {
-				font-family: "Roboto", Arial, sans-serif;
-				max-width: 800px;
-				margin: 0 auto;
-				padding: 20px;
-				background-color: #f5f5f5;
-				color: #333;
-			}
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ICS File Processor and Chunker</title>
+    <script src="https://cdn.jsdelivr.net/npm/ical.js@1.5.0/build/ical.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.7.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;700&display=swap" rel="stylesheet" />
+    <style>
+        body {
+            font-family: "Roboto", Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+            color: #333;
+        }
+        .container {
+            background-color: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            color: #2c3e50;
+            margin-bottom: 20px;
+        }
+        p {
+            line-height: 1.6;
+            color: #555;
+        }
+        .form-container {
+            background-color: #f9f9f9;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        .form-group input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 16px;
+            box-sizing: border-box; /* Ensure padding is included in width */
+        }
+        .form-group input[type="file"] {
+            padding: 10px 0 10px 10px;
+        }
+        button {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #2980b9;
+        }
+        button:disabled {
+            background-color: #bdc3c7;
+            cursor: not-allowed;
+        }
+        #results {
+            margin-top: 30px;
+        }
+        .result-box {
+            background-color: #e8f4fd;
+            border: 1px solid #b8daff;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        .result-box h3 {
+            color: #004085;
+            margin-top: 0;
+        }
+        .download-button {
+            background-color: #28a745;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+            font-size: 18px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .download-button:hover {
+            background-color: #218838;
+        }
 
-			.container {
-				background-color: white;
-				padding: 30px;
-				border-radius: 8px;
-				box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-			}
-
-			h1 {
-				color: #2c3e50;
-				margin-bottom: 1.25rem; /* 20px */
-			}
-
-			p {
-				line-height: 1.6;
-				color: #555;
-			}
-
-			hr {
-				margin-top: 1.5em;
-				margin-bottom: 1.5em;
-			}
-
-			.form-group {
-				margin-bottom: 1.25rem; /* 20px */
-			}
-
-			label {
-				display: block;
-				margin-bottom: 0.3125rem; /* 5px */
-				font-weight: bold;
-			}
-
-			input[type="file"],
-			input[type="email"] {
-				width: 100%;
-				padding: 0.625rem; /* 10px */
-				border: 0.0625rem solid #ddd; /* 1px */
-				border-radius: 0.25rem; /* 4px */
-				font-size: 1rem; /* 16px */
-			}
-
-			button {
-				background-color: #3498db;
-				color: white;
-				border: none;
-				padding: 0.625rem 1.25rem; /* 10px 20px */
-				border-radius: 0.25rem; /* 4px */
-				cursor: pointer;
-				transition: background-color 0.3s;
-				font-size: 1rem; /* 16px */
-			}
-
-			button:hover {
-				background-color: #2980b9;
-			}
-
-			button:disabled {
-				background-color: #bdc3c7;
-				cursor: not-allowed;
-			}
-
-			#result-section {
-				background-color: #f8f9fa;
-				border-radius: 0.5rem; /* 8px */
-				padding: 1.25rem; /* 20px */
-			}
-
-			.download-box {
-				background-color: #e8f4fd;
-				border: 0.0625rem solid #b8daff; /* 1px */
-				border-radius: 0.5rem; /* 8px */
-				padding: 1.25rem; /* 20px */
-				display: flex;
-				flex-direction: column;
-				align-items: center;
-				margin-bottom: 1.25rem; /* 20px */
-			}
-
-			.download-box h3 {
-				color: #004085;
-				margin-top: 0;
-				margin-bottom: 0;
-			}
-
-			.download-button {
-				background-color: #28a745;
-				color: white;
-				border: none;
-				padding: 0.75rem 1.5rem; /* 12px 24px */
-				border-radius: 0.25rem; /* 4px */
-				cursor: pointer;
-				transition: background-color 0.3s;
-				font-size: 1.125rem; /* 18px */
-				display: inline-flex;
-				align-items: center;
-				justify-content: center;
-			}
-
-			.download-button:hover {
-				background-color: #218838;
-			}
-
-			.download-button svg {
-				margin-right: 0.5rem; /* 8px */
-			}
-
-			.summary-box {
-				background-color: #ffffff;
-				border: 0.0625rem solid #e9ecef; /* 1px */
-				border-radius: 0.5rem; /* 8px */
-				padding: 1.25rem; /* 20px */
-			}
-
-			.summary-box h2 {
-				color: #2c3e50;
-				margin-top: 0;
-			}
-
-			footer {
-				text-align: center;
-				margin-top: 1.875rem; /* 30px */
-				color: #7f8c8d;
-				font-size: 0.9em;
-			}
-
-			footer a {
-				color: #3498db;
-				text-decoration: none;
-			}
-
-			footer a:visited {
-				color: #3498db;
-			}
-
-			footer a:hover {
-				text-decoration: underline;
-			}
-		</style>
-	</head>
-	<body>
-		<div class="container">
-			<h1>ICS File Processor</h1>
-			<p>
-				This tool processes and cleans ICS files, sorting events chronologically
-				and ensuring recurring events appear before their exceptions. It also
-				removes non-standard properties and provides a summary of the processed
-				calendar.
-			</p>
-			<hr />
-			<form id="processingForm">
-				<div class="form-group">
-					<label for="emailInput">Your Ufinity Email:</label>
-					<input
-						type="email"
-						id="emailInput"
-						placeholder="username@ufinity.com"
-						required
-					/>
-				</div>
-				<div class="form-group">
-					<label for="fileInput">Select ICS File:</label>
-					<input type="file" id="fileInput" accept=".ics" required />
-				</div>
-				<button type="submit" id="processButton">Process ICS File</button>
-			</form>
-			<hr />
-			<div id="result-section" style="display: none">
-				<div class="download-box">
-					<h3>Your processed ICS file is ready!</h3>
-					<p>
-						Click the button below to download your cleaned and sorted calendar
-						file.
-					</p>
-					<button id="downloadButton" class="download-button">
-						<svg
-							xmlns="http://www.w3.org/2000/svg"
-							width="20"
-							height="20"
-							viewBox="0 0 24 24"
-							fill="none"
-							stroke="currentColor"
-							stroke-width="2"
-							stroke-linecap="round"
-							stroke-linejoin="round"
-						>
-							<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-							<polyline points="7 10 12 15 17 10"></polyline>
-							<line x1="12" y1="15" x2="12" y2="3"></line>
-						</svg>
-						Download Processed ICS
-					</button>
-				</div>
-				<div id="summary" class="summary-box"></div>
-			</div>
-		</div>
-		<footer>
-			Made by <a href="https://linjin.me" target="_blank">Jin</a>, with
-			<a href="https://www.anthropic.com/news/claude-3-5-sonnet" target="_blank"
-				>Claude 3.5 Sonnet</a
-			>
-		</footer>
-
-		<script>
-			const processingForm = document.getElementById("processingForm");
-			const fileInput = document.getElementById("fileInput");
-			const emailInput = document.getElementById("emailInput");
-			const processButton = document.getElementById("processButton");
-			const downloadButton = document.getElementById("downloadButton");
-			const summaryDiv = document.getElementById("summary");
-			let processedCalendar;
-
-			processingForm.addEventListener("submit", handleProcessing);
-			downloadButton.addEventListener("click", downloadProcessedFile);
-
-			function handleProcessing(event) {
-				event.preventDefault();
-
-				const email = emailInput.value.trim();
-				if (!email.endsWith("@ufinity.com")) {
-					alert(
-						"Please enter a valid Ufinity email address (ending with @ufinity.com)."
-					);
-					return;
+				.download-button svg {
+					margin-right: 0.5rem; /* 8px */
 				}
 
-				if (!fileInput.files[0]) {
-					alert("Please select an ICS file to process.");
-					return;
-				}
+        .summary-box {
+            background-color: #ffffff;
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+            padding: 20px;
+        }
+        .summary-box h2 {
+            color: #2c3e50;
+            margin-top: 0;
+        }
+        .chunk-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .chunk-item {
+            background-color: #f0f0f0;
+            padding: 10px;
+            border-radius: 4px;
+            text-align: center;
+        }
+        .chunk-item a {
+            display: block;
+            color: #3498db;
+            text-decoration: none;
+            margin-bottom: 5px;
 
-				const file = fileInput.files[0];
-				const reader = new FileReader();
+						/* Standard CSS ellipsis */
+						white-space: nowrap;                   
+						overflow: hidden;
+						text-overflow: ellipsis;
+						
+						/* Beginning of string */
+						direction: rtl;
+						text-align: left;
+        }
+        .chunk-item a:hover {
+            text-decoration: underline;
+        }
+        .download-all-wrapper {
+            text-align: center;
+            margin-top: 20px;
+            margin-bottom: 20px;
+        }
+        #downloadAllButton {
+            font-size: 1.1em;
+            padding: 12px 24px;
+        }
+        .spinner {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin 1s ease-in-out infinite;
+            margin-right: 10px;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .hidden {
+            display: none;
+        }
+        footer {
+            text-align: center;
+            margin-top: 30px;
+            color: #7f8c8d;
+            font-size: 0.9em;
+        }
+        footer a {
+            color: #3498db;
+            text-decoration: none;
+        }
+        footer a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>ICS File Processor and Chunker</h1>
+        <p>
+            This tool processes and cleans ICS files, sorting events chronologically and ensuring recurring events appear before their exceptions. For large calendars (over 1000 events), it automatically splits the file into manageable chunks.
+        </p>
+        <div id="formContainer" class="form-container">
+            <div class="form-group">
+                <label for="emailInput">Your Ufinity Email:</label>
+                <input type="email" id="emailInput" placeholder="username@ufinity.com" required />
+            </div>
+            <div class="form-group">
+                <label for="fileInput">Select ICS File:</label>
+                <input type="file" id="fileInput" accept=".ics" required />
+            </div>
+            <button id="processButton">Process ICS File</button>
+        </div>
+        <div id="results" class="hidden"></div>
+    </div>
+    <footer>
+        Made by <a href="https://linjin.me" target="_blank">Jin</a>, with
+        <a href="https://www.anthropic.com/news/claude-3-5-sonnet" target="_blank">Claude 3.5 Sonnet</a>
+    </footer>
+    <script>
+        // Configuration
+        const CHUNKING_STRATEGIES = {
+            SIZE: "size",
+            COUNT: "count",
+        };
 
-				reader.onload = function (e) {
-					const icsData = e.target.result;
-					processIcsFile(icsData);
-				};
+        const CHUNKING_CONFIG = {
+            strategy: CHUNKING_STRATEGIES.COUNT,
+            countLimit: 1000, // Number of events per chunk
+        };
 
-				reader.readAsText(file);
-			}
+        let originalFileName = "";
+        let processedCalendar;
 
-			function handleFileUpload(event) {
-				const file = event.target.files[0];
-				const reader = new FileReader();
+        function validateEmail(email) {
+            return email.endsWith("@ufinity.com");
+        }
 
-				reader.onload = function (e) {
-					const icsData = e.target.result;
-					processIcsFile(icsData);
-				};
+        function generateNewUID() {
+            return "SYNTHETIC-" + Math.random().toString(36).substr(2, 9) + "-" +
+                ([1e7] + -1e3 + -4e3 + -8e3 + -1e11).replace(/[018]/g, c =>
+                    (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16)
+                );
+        }
 
-				reader.readAsText(file);
-			}
+        function addImportCompleteEvent(component, email, chunkNumber, totalChunks) {
+            const now = new Date();
+            const startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            const endDate = new Date(startDate);
+            endDate.setDate(endDate.getDate() + 2);
+            endDate.setMinutes(endDate.getMinutes() - 1);
 
-			function generateNewUID() {
-				return (
-					"SYNTHETIC-" +
-					Math.random().toString(36).substr(2, 9) +
-					"-" +
-					([1e7] + -1e3 + -4e3 + -8e3 + -1e11).replace(/[018]/g, (c) =>
-						(
-							c ^
-							(crypto.getRandomValues(new Uint8Array(1))[0] & (15 >> (c / 4)))
-						).toString(16)
-					)
-				);
-			}
-			function cleanComponent(component) {
-				const standardProps = {
-					vevent: [
-						"uid",
-						"dtstart",
-						"dtend",
-						"summary",
-						"description",
-						"location",
-						"url",
-						"rrule",
-						"recurrence-id",
-						"sequence",
-						"status",
-						"transp",
-						"organizer",
-						"attendee",
-						"created",
-						"last-modified",
-						"dtstamp",
-					],
-				};
+            const specialEvent = new ICAL.Component("vevent");
+            specialEvent.addPropertyWithValue("uid", generateNewUID());
+            specialEvent.addPropertyWithValue("summary", `${chunkNumber ? `Chunk ${chunkNumber} of ${totalChunks}` : "Calendar"} Import Completed`);
+            specialEvent.addPropertyWithValue("dtstart", ICAL.Time.fromJSDate(startDate, true));
+            specialEvent.addPropertyWithValue("dtend", ICAL.Time.fromJSDate(endDate, true));
+            specialEvent.addPropertyWithValue("status", "CONFIRMED");
+            specialEvent.addPropertyWithValue("class", "PUBLIC");
+            specialEvent.addPropertyWithValue("transp", "TRANSPARENT");
+            specialEvent.addPropertyWithValue("last-modified", ICAL.Time.now());
+            specialEvent.addPropertyWithValue("dtstamp", ICAL.Time.now());
+            specialEvent.addPropertyWithValue("sequence", 0);
 
-				// If the component is not in our standardProps, return it as is
-				if (!standardProps.hasOwnProperty(component.name.toLowerCase())) {
-					return component;
-				}
+            const alarm = new ICAL.Component("valarm");
+            alarm.addPropertyWithValue("action", "EMAIL");
+            alarm.addPropertyWithValue("trigger", "-P1DT7H");
+            alarm.addPropertyWithValue("description", `${chunkNumber ? `Chunk ${chunkNumber} of ${totalChunks}` : "Your calendar"} has been imported successfully.`);
+            alarm.addPropertyWithValue("summary", "Reminder");
+            alarm.addPropertyWithValue("attendee", `mailto:${email}`);
 
-				const cleanedComponent = new ICAL.Component(component.jCal);
-				const componentProps =
-					standardProps[component.name.toLowerCase()] || [];
-				const cleanedProps = component
-					.getAllProperties()
-					.filter(
-						(prop) =>
-							componentProps.includes(prop.name.toLowerCase()) &&
-							!prop.name.startsWith("x-")
-					);
+            specialEvent.addSubcomponent(alarm);
+            component.addSubcomponent(specialEvent);
+        }
 
-				cleanedComponent.removeAllProperties();
-				cleanedProps.forEach((prop) => cleanedComponent.addProperty(prop));
+        function cleanComponent(component) {
+            const standardProps = {
+                vevent: [
+                    "uid", "dtstart", "dtend", "summary", "description", "location",
+                    "url", "rrule", "recurrence-id", "sequence", "status", "transp",
+                    "organizer", "attendee", "created", "last-modified", "dtstamp"
+                ],
+            };
 
-				// Clean subcomponents recursively
-				component.getAllSubcomponents().forEach((subcomp) => {
-					cleanedComponent.addSubcomponent(cleanComponent(subcomp));
-				});
+            if (!standardProps.hasOwnProperty(component.name.toLowerCase())) {
+                return component;
+            }
 
-				return cleanedComponent;
-			}
+            const cleanedComponent = new ICAL.Component(component.jCal);
+            const componentProps = standardProps[component.name.toLowerCase()] || [];
+            const cleanedProps = component.getAllProperties().filter(
+                prop => componentProps.includes(prop.name.toLowerCase()) && !prop.name.startsWith("x-")
+            );
 
-			function processIcsFile(icsData) {
-				try {
-					const jcalData = ICAL.parse(icsData);
-					const comp = new ICAL.Component(jcalData);
+            cleanedComponent.removeAllProperties();
+            cleanedProps.forEach(prop => cleanedComponent.addProperty(prop));
 
-					// Create a new calendar component
-					processedCalendar = new ICAL.Component(["vcalendar", [], []]);
+            component.getAllSubcomponents().forEach(subcomp => {
+                cleanedComponent.addSubcomponent(cleanComponent(subcomp));
+            });
 
-					// Copy only standard properties from the original calendar
-					const standardCalendarProps = [
-						"prodid",
-						"version",
-						"calscale",
-						"method",
-					];
-					standardCalendarProps.forEach((propName) => {
-						const prop = comp.getFirstProperty(propName);
-						if (prop) {
-							processedCalendar.addProperty(prop);
-						}
-					});
+            return cleanedComponent;
+        }
 
-					// Process and add all components
-					const components = comp.getAllSubcomponents();
-					const vtimezones = [];
-					const vevents = [];
-					const otherComponents = [];
+        async function processICSFile(file) {
+            const email = document.getElementById("emailInput").value.trim();
 
-					components.forEach((component) => {
-						if (component.name === "vtimezone") {
-							vtimezones.push(cleanComponent(component));
-						} else if (component.name === "vevent") {
-							const cleanedEvent = cleanComponent(component);
-							vevents.push(cleanedEvent);
-						} else {
-							otherComponents.push(cleanComponent(component));
-						}
-					});
+            if (!validateEmail(email)) {
+                alert("Please enter a valid Ufinity email address (ending with @ufinity.com).");
+                return;
+            }
 
-					// Add VTIMEZONE components first
-					vtimezones.forEach((vtimezone) => {
-						processedCalendar.addSubcomponent(vtimezone);
-					});
+            try {
+                const content = await readFile(file);
+                const jcalData = ICAL.parse(content);
+                const comp = new ICAL.Component(jcalData);
 
-					// Sort events chronologically
-					vevents.sort((a, b) => {
-						const dateA = a.getFirstPropertyValue("dtstart");
-						const dateB = b.getFirstPropertyValue("dtstart");
-						return dateA.compare(dateB);
-					});
+                processedCalendar = new ICAL.Component(["vcalendar", [], []]);
 
-					// Ensure recurring events appear before their exceptions
-					const recurringEvents = new Map();
-					const normalEvents = [];
+                const standardCalendarProps = ["prodid", "version", "calscale", "method"];
+                standardCalendarProps.forEach(propName => {
+                    const prop = comp.getFirstProperty(propName);
+                    if (prop) {
+                        processedCalendar.addProperty(prop);
+                    }
+                });
 
-					vevents.forEach((vevent) => {
-						const uid = vevent.getFirstPropertyValue("uid");
-						const recurrenceId = vevent.getFirstPropertyValue("recurrence-id");
-						const rrule = vevent.getFirstPropertyValue("rrule");
+                const components = comp.getAllSubcomponents();
+                const vtimezones = [];
+                const vevents = [];
+                const otherComponents = [];
 
-						if (rrule) {
-							if (!recurringEvents.has(uid)) {
-								recurringEvents.set(uid, { base: vevent, exceptions: [] });
-							} else {
-								recurringEvents.get(uid).base = vevent;
-							}
-						} else if (recurrenceId) {
-							if (!recurringEvents.has(uid)) {
-								recurringEvents.set(uid, { base: null, exceptions: [vevent] });
-							} else {
-								recurringEvents.get(uid).exceptions.push(vevent);
-							}
-						} else {
-							normalEvents.push(vevent);
-						}
-					});
+                components.forEach(component => {
+                    if (component.name === "vtimezone") {
+                        vtimezones.push(cleanComponent(component));
+                    } else if (component.name === "vevent") {
+                        const cleanedEvent = cleanComponent(component);
+                        vevents.push(cleanedEvent);
+                    } else {
+                        otherComponents.push(cleanComponent(component));
+                    }
+                });
 
-					// Add normal events
-					normalEvents.forEach((event) => {
-						processedCalendar.addSubcomponent(event);
-					});
+                vtimezones.forEach(vtimezone => {
+                    processedCalendar.addSubcomponent(vtimezone);
+                });
 
-					// Add recurring events and their exceptions
-					recurringEvents.forEach(({ base, exceptions }) => {
-						if (base) {
-							processedCalendar.addSubcomponent(base);
-						}
-						exceptions.forEach((exception) => {
-							processedCalendar.addSubcomponent(exception);
-						});
-					});
+                vevents.sort((a, b) => {
+                    const dateA = a.getFirstPropertyValue("dtstart");
+                    const dateB = b.getFirstPropertyValue("dtstart");
+                    return dateA.compare(dateB);
+                });
 
-					// Add all other components
-					otherComponents.forEach((component) => {
-						processedCalendar.addSubcomponent(component);
-					});
+                const recurringEvents = new Map();
+                const normalEvents = [];
 
-					// Add the special reminder VEVENT at the end to trigger calendar import completion
-					addImportCompleteEvent();
+                vevents.forEach(vevent => {
+                    const uid = vevent.getFirstPropertyValue("uid");
+                    const recurrenceId = vevent.getFirstPropertyValue("recurrence-id");
+                    const rrule = vevent.getFirstPropertyValue("rrule");
 
-					// Display summary
-					displaySummary(
-						vtimezones,
-						recurringEvents,
-						normalEvents,
-						otherComponents
-					);
+                    if (rrule) {
+                        if (!recurringEvents.has(uid)) {
+                            recurringEvents.set(uid, { base: vevent, exceptions: [] });
+                        } else {
+                            recurringEvents.get(uid).base = vevent;
+                        }
+                    } else if (recurrenceId) {
+                        if (!recurringEvents.has(uid)) {
+                            recurringEvents.set(uid, { base: null, exceptions: [vevent] });
+                        } else {
+                            recurringEvents.get(uid).exceptions.push(vevent);
+                        }
+                    } else {
+                        normalEvents.push(vevent);
+                    }
+                });
 
-					hideInputForm();
+                normalEvents.forEach(event => {
+                    processedCalendar.addSubcomponent(event);
+                });
 
-					downloadButton.style.display = "inline-flex";
-				} catch (error) {
-					console.error("Error processing ICS file:", error);
-					alert(
-						"An error occurred while processing the ICS file. Please try again."
-					);
-				}
-			}
+                recurringEvents.forEach(({ base, exceptions }) => {
+                    if (base) {
+                        processedCalendar.addSubcomponent(base);
+                    }
+                    exceptions.forEach(exception => {
+                        processedCalendar.addSubcomponent(exception);
+                    });
+                });
 
-			function hideInputForm() {
-				document.getElementById("processingForm").style.display = "none";
-				document.querySelector("hr").style.display = "none"; // Hide the first horizontal line
-			}
+                otherComponents.forEach(component => {
+                    processedCalendar.addSubcomponent(component);
+                });
 
-			function displaySummary(
-				vtimezones,
-				recurringEvents,
-				normalEvents,
-				otherComponents
-			) {
-				const totalEvents = recurringEvents.size + normalEvents.length;
-				const recurringEventsCount = recurringEvents.size;
-				const recurringEventsExceptionsCount = Array.from(
-					recurringEvents.values()
-				).reduce((sum, { exceptions }) => sum + exceptions.length, 0);
+                const totalEvents = processedCalendar.getAllSubcomponents("vevent").length;
 
-				let summaryHtml = `
-    <h2>Summary of Processed Calendar</h2>
-    <ul>
-      <li>Total events: ${totalEvents}</li>
-      <li>Normal events: ${normalEvents.length}</li>
-      <li>Recurring events: ${recurringEventsCount}</li>
-      <li>Recurring event exceptions: ${recurringEventsExceptionsCount}</li>
-      <li>Timezones: ${vtimezones.length}</li>
-      <li>Other components: ${otherComponents.length}</li>
-    </ul>
-  `;
+                if (totalEvents > CHUNKING_CONFIG.countLimit) {
+                    const chunks = chunkComponents(processedCalendar, CHUNKING_CONFIG);
+                    const icsFiles = generateICSFiles(chunks, email);
+                    displayChunkedResults(icsFiles, totalEvents);
+                } else {
+                    addImportCompleteEvent(processedCalendar, email);
+                    displaySingleFileResult(totalEvents);
+                }
+            } catch (error) {
+                console.error("Error processing ICS file:", error);
+                alert("An error occurred while processing the ICS file. Please try again.");
+            }
+        }
 
-				summaryDiv.innerHTML = summaryHtml;
-				document.getElementById("result-section").style.display = "block";
-			}
+        function readFile(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = e => resolve(e.target.result);
+                reader.onerror = e => reject(new Error("Error reading file"));
+                reader.readAsText(file);
+            });
+        }
 
-			function downloadProcessedFile() {
-				if (!emailInput.value) {
-					alert("Please enter your Ufinity email address.");
-					return;
-				}
+        function chunkComponents(component, config) {
+            const allComponents = component.getAllSubcomponents();
+            const timezones = allComponents.filter(c => c.name === "vtimezone");
+            const otherComponents = allComponents.filter(c => c.name !== "vtimezone");
 
-				const icsData = processedCalendar.toString();
-				const blob = new Blob([icsData], { type: "text/calendar" });
-				const url = URL.createObjectURL(blob);
+            return chunkComponentsByCount(component, otherComponents, timezones, config.countLimit);
+        }
 
-				const originalFileName = fileInput.files[0].name;
-				const processedFileName = originalFileName.replace(
-					".ics",
-					"_processed.ics"
-				);
+        function deepClone(obj) {
+            if (obj instanceof ICAL.Component) {
+							const newComp = new ICAL.Component(obj.jCal[0]);
+                obj.getAllProperties().forEach(prop => {
+                    newComp.addProperty(deepClone(prop));
+                });
+                obj.getAllSubcomponents().forEach(subcomp => {
+                    newComp.addSubcomponent(deepClone(subcomp));
+                });
+                return newComp;
+            } else if (obj instanceof ICAL.Property) {
+                return new ICAL.Property(obj.toJSON());
+            } else {
+                return obj;
+            }
+        }
 
-				const a = document.createElement("a");
-				a.href = url;
-				a.download = processedFileName;
-				document.body.appendChild(a);
-				a.click();
-				document.body.removeChild(a);
-				URL.revokeObjectURL(url);
-			}
+        function createNewChunk(originalComponent, timezones) {
+            const newChunk = new ICAL.Component(["vcalendar", [], []]);
 
-			function addImportCompleteEvent() {
-				const now = new Date();
-				const startDate = new Date(
-					now.getFullYear(),
-					now.getMonth(),
-					now.getDate()
-				);
-				const endDate = new Date(startDate);
-				endDate.setDate(endDate.getDate() + 2); // Add 2 days
-				endDate.setMinutes(endDate.getMinutes() - 1); // Subtract 1 minute, so we get "2359"
+            originalComponent.getAllProperties().forEach(prop => {
+                newChunk.addProperty(deepClone(prop));
+            });
 
-				const specialEvent = new ICAL.Component("vevent");
-				specialEvent.addPropertyWithValue("uid", generateNewUID());
-				specialEvent.addPropertyWithValue(
-					"summary",
-					"Zimbra Calendar Import Completed"
-				);
-				specialEvent.addPropertyWithValue(
-					"dtstart",
-					ICAL.Time.fromJSDate(startDate, true)
-				);
-				specialEvent.addPropertyWithValue(
-					"dtend",
-					ICAL.Time.fromJSDate(endDate, true)
-				);
-				specialEvent.addPropertyWithValue("status", "CONFIRMED");
-				specialEvent.addPropertyWithValue("class", "PUBLIC");
-				specialEvent.addPropertyWithValue("transp", "TRANSPARENT");
-				specialEvent.addPropertyWithValue("last-modified", ICAL.Time.now());
-				specialEvent.addPropertyWithValue("dtstamp", ICAL.Time.now());
-				specialEvent.addPropertyWithValue("sequence", 0);
+            timezones.forEach(timezone => {
+                newChunk.addSubcomponent(deepClone(timezone));
+            });
 
-				const alarm = new ICAL.Component("valarm");
-				alarm.addPropertyWithValue("action", "EMAIL");
-				alarm.addPropertyWithValue("trigger", "-P1DT7H");
-				alarm.addPropertyWithValue(
-					"description",
-					"Your Zimbra calendar has been imported successfully."
-				);
-				alarm.addPropertyWithValue("summary", "Reminder");
-				alarm.addPropertyWithValue(
-					"attendee",
-					"mailto:" + emailInput.value.trim()
-				);
+            return newChunk;
+        }
 
-				specialEvent.addSubcomponent(alarm);
-				processedCalendar.addSubcomponent(specialEvent);
-			}
-		</script>
-	</body>
+        function chunkComponentsByCount(component, otherComponents, timezones, chunkSize) {
+            const chunks = [];
+            for (let i = 0; i < otherComponents.length; i += chunkSize) {
+                const chunkComponents = otherComponents.slice(i, i + chunkSize);
+                const newChunk = createNewChunk(component, timezones);
+
+                chunkComponents.forEach(comp => {
+                    newChunk.addSubcomponent(deepClone(comp));
+                });
+
+                chunks.push(newChunk);
+            }
+            return chunks;
+        }
+
+        function generateICSFiles(chunkedComponents, email) {
+            return chunkedComponents.map((chunk, index) => {
+                addImportCompleteEvent(chunk, email, index + 1, chunkedComponents.length);
+                const content = chunk.toString();
+                // Update the naming convention for chunks
+                const chunkName = originalFileName.replace(".ics", `_processed_chunk_${index + 1}.ics`);
+                return { name: chunkName, content, stats: getChunkStats(chunk) };
+            });
+        }
+
+        function getChunkStats(chunk) {
+            const events = chunk.getAllSubcomponents("vevent");
+            return {
+                totalEvents: events.length,
+                normalEvents: events.filter(e => !e.getFirstPropertyValue("rrule") && !e.getFirstPropertyValue("recurrence-id")).length,
+                recurringEvents: events.filter(e => e.getFirstPropertyValue("rrule")).length,
+                recurringEventExceptions: events.filter(e => e.getFirstPropertyValue("recurrence-id")).length,
+                timezones: chunk.getAllSubcomponents("vtimezone").length,
+                otherComponents: chunk.getAllSubcomponents().filter(c => c.name !== "vevent" && c.name !== "vtimezone").length
+            };
+        }
+
+				function displayChunkedResults(icsFiles, totalEvents) {
+            const formContainer = document.getElementById("formContainer");
+            formContainer.classList.add("hidden");
+
+            const resultsDiv = document.getElementById("results");
+            resultsDiv.classList.remove("hidden");
+            resultsDiv.innerHTML = `
+                <div class="result-box">
+                    <h3>Your processed ICS files are ready!</h3>
+                    <p>Your calendar with ${totalEvents} events has been cleaned, sorted and and split into ${icsFiles.length} chunks.</p>
+                    <p>Click on individual chunks to download or use the button below to download all chunks as a ZIP file.</p>
+                </div>
+                <div class="chunk-list"></div>
+                <div class="download-all-wrapper">
+                    <button id="downloadAllButton" class="download-button">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="7 10 12 15 17 10"></polyline>
+                            <line x1="12" y1="15" x2="12" y2="3"></line>
+                        </svg>
+                        Download All Chunks (ZIP)
+                    </button>
+                </div>
+                <div class="summary-box">
+                    <h2>Summary of Processed Calendar Chunks</h2>
+                    <div id="chunkSummaries"></div>
+                </div>
+            `;
+
+            const chunkList = resultsDiv.querySelector(".chunk-list");
+            const chunkSummaries = document.getElementById("chunkSummaries");
+            
+            icsFiles.forEach((file, index) => {
+                const chunkItem = document.createElement("div");
+                chunkItem.className = "chunk-item";
+                chunkItem.innerHTML = `<a href="#" data-index="${index}">${file.name}</a>`;
+                chunkList.appendChild(chunkItem);
+
+                // Add summary for each chunk
+                const summary = document.createElement("div");
+                summary.innerHTML = `
+                    <h3>Chunk ${index + 1}</h3>
+                    <ul>
+                        <li>Total events: ${file.stats.totalEvents}</li>
+                        <li>Normal events: ${file.stats.normalEvents}</li>
+                        <li>Recurring events: ${file.stats.recurringEvents}</li>
+                        <li>Recurring event exceptions: ${file.stats.recurringEventExceptions}</li>
+                        <li>Timezones: ${file.stats.timezones}</li>
+                        <li>Other components: ${file.stats.otherComponents}</li>
+                    </ul>
+                `;
+                chunkSummaries.appendChild(summary);
+            });
+
+            chunkList.addEventListener("click", (e) => {
+                if (e.target.tagName === "A") {
+                    e.preventDefault();
+                    const index = parseInt(e.target.dataset.index);
+                    downloadSingleChunk(icsFiles[index]);
+                }
+            });
+
+            document.getElementById("downloadAllButton").addEventListener("click", () => downloadZip(icsFiles));
+        }
+
+				function displaySingleFileResult(totalEvents) {
+            const formContainer = document.getElementById("formContainer");
+            formContainer.classList.add("hidden");
+
+            const resultsDiv = document.getElementById("results");
+            resultsDiv.classList.remove("hidden");
+            resultsDiv.innerHTML = `
+                <div class="result-box">
+                    <h3>Your processed ICS file is ready!</h3>
+                    <p>Click the button below to download your cleaned and sorted calendar file.</p>
+                    <button id="downloadButton" class="download-button">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="7 10 12 15 17 10"></polyline>
+                            <line x1="12" y1="15" x2="12" y2="3"></line>
+                        </svg>
+                        Download Processed ICS
+                    </button>
+                </div>
+                <div class="summary-box">
+                    <h2>Summary of Processed Calendar</h2>
+                    <ul>
+                        <li>Total events: ${totalEvents}</li>
+                        <li>Normal events: ${processedCalendar.getAllSubcomponents("vevent").filter(e => !e.getFirstPropertyValue("rrule") && !e.getFirstPropertyValue("recurrence-id")).length}</li>
+                        <li>Recurring events: ${processedCalendar.getAllSubcomponents("vevent").filter(e => e.getFirstPropertyValue("rrule")).length}</li>
+                        <li>Recurring event exceptions: ${processedCalendar.getAllSubcomponents("vevent").filter(e => e.getFirstPropertyValue("recurrence-id")).length}</li>
+                        <li>Timezones: ${processedCalendar.getAllSubcomponents("vtimezone").length}</li>
+                        <li>Other components: ${processedCalendar.getAllSubcomponents().filter(c => c.name !== "vevent" && c.name !== "vtimezone").length}</li>
+                    </ul>
+                </div>
+            `;
+
+            document.getElementById("downloadButton").addEventListener("click", downloadProcessedFile);
+        }
+
+        function downloadSingleChunk(file) {
+            const blob = new Blob([file.content], { type: "text/calendar" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = file.name;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        async function downloadZip(icsFiles) {
+            const downloadAllButton = document.getElementById("downloadAllButton");
+            downloadAllButton.disabled = true;
+            downloadAllButton.innerHTML = '<span class="spinner"></span>Preparing ZIP...';
+
+            try {
+                const zip = new JSZip();
+                icsFiles.forEach(file => zip.file(file.name, file.content));
+                const content = await zip.generateAsync({ type: "blob" });
+
+                const baseName = originalFileName.replace(/\.ics$/i, "");
+                const zipFileName = `${baseName}_processed_chunked.zip`;
+
+                saveAs(content, zipFileName);
+
+                downloadAllButton.innerHTML = "Download Complete!";
+                setTimeout(() => {
+                    downloadAllButton.disabled = false;
+                    downloadAllButton.innerHTML = "Download All (Zip)";
+                }, 3000);
+            } catch (error) {
+                alert(`Error creating ZIP: ${error.message}`);
+                downloadAllButton.disabled = false;
+                downloadAllButton.innerHTML = "Download All (Zip)";
+            }
+        }
+
+        function downloadProcessedFile() {
+            const icsData = processedCalendar.toString();
+            const blob = new Blob([icsData], { type: "text/calendar" });
+            const url = URL.createObjectURL(blob);
+
+            const processedFileName = originalFileName.replace(".ics", "_processed.ics");
+
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = processedFileName;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        document.getElementById("processButton").addEventListener("click", () => {
+            const fileInput = document.getElementById("fileInput");
+            const emailInput = document.getElementById("emailInput");
+            const file = fileInput.files[0];
+            const email = emailInput.value.trim();
+
+            if (!file) {
+                alert("Please select an ICS file");
+                return;
+            }
+
+            if (!validateEmail(email)) {
+                alert("Please enter a valid Ufinity email address (ending with @ufinity.com).");
+                return;
+            }
+
+            originalFileName = file.name;
+            processICSFile(file);
+        });
+    </script>
+</body>
 </html>
