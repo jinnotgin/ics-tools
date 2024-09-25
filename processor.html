@@ -192,6 +192,11 @@
 			footer a:hover {
 				text-decoration: underline;
 			}
+			#processButton {
+				display: flex;
+				align-items: center;
+				transition: background-color 0s;
+			}
 		</style>
 	</head>
 	<body>
@@ -222,7 +227,7 @@
 			<div id="results" class="hidden"></div>
 		</div>
 		<footer>
-			Made by <a href="https://linjin.me" target="_blank">Jin</a>, with
+			v0.3 - Made by <a href="https://linjin.me" target="_blank">Jin</a>, with
 			<a href="https://www.anthropic.com/news/claude-3-5-sonnet" target="_blank"
 				>Claude 3.5 Sonnet</a
 			>
@@ -258,6 +263,10 @@
 						).toString(16)
 					)
 				);
+			}
+
+			function sleep(ms) {
+				return new Promise((resolve) => setTimeout(resolve, ms));
 			}
 
 			function sanitizeICSContent(icsContent) {
@@ -414,6 +423,14 @@
 					return;
 				}
 
+				// Disable the process button and show processing indicator
+				const processButton = document.getElementById("processButton");
+				processButton.disabled = true;
+				processButton.innerHTML = '<span class="spinner"></span>Processing...';
+
+				// Sleep for a short time to allow UI to update
+				await sleep(100);
+
 				let originalParseError, sanitizedParseError;
 				try {
 					const content = await readFile(file);
@@ -427,6 +444,11 @@
 							"Failed to parse without sanitization, attempting with sanitization..."
 						);
 						originalParseError = error;
+
+						const processButton = document.getElementById("processButton");
+						processButton.innerHTML = '<span class="spinner"></span>Processing... (this might take a while)';
+						// Sleep for a short time to allow UI to update
+						await sleep(100);
 
 						// Second attempt: Process with sanitization
 						try {
@@ -550,6 +572,10 @@
 					alert(
 						"An error occurred while processing the ICS file. Please check the console for more details and try again."
 					);
+
+					// Re-enable the process button and reset its text
+					processButton.disabled = false;
+					processButton.innerHTML = "Process ICS File";
 				}
 			}
 
